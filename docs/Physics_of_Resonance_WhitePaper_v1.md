@@ -6,17 +6,17 @@ Version: v1.0 (EN, full expanded)
 
 Abstract:
 
-We propose a resonance–fractal paradigm that unifies micro‑ and macro‑scales through a single mechanism: **phase retention**. Energy is treated as the coherence of frequency‑phase states; gravity is the geometrization of retained energy. Fundamental laws (quantization, conservation of energy, thermodynamics, GR) are expressed through phase coherence. We provide resonant interpretations of quantum and astrophysical phenomena (observer and collapse, tunneling as phase matching, neutron‑star collisions, Saturn’s hexagon, the Great Attractor, the Boötes Void) and an engineering sketch of “cold plasma” via phase synchronization.
+We propose a resonance–fractal paradigm that unifies micro‑ and macro‑scales through a single mechanism: phase retention. Energy is treated as the coherence of frequency‑phase states; gravity is the geometrization of retained energy. Fundamental laws (quantization, conservation of energy, thermodynamics, GR) are expressed through phase coherence. We provide resonant interpretations of quantum and astrophysical phenomena (observer and collapse, tunneling as phase matching, neutron‑star collisions, Saturn’s hexagon, the Great Attractor, the Boötes Void) and an engineering sketch of “cold plasma” via phase synchronization.
 
 
 0. Terms
 
 Resonant node (quantum): localized, phase‑coherent mode of a field that retains energy; a stable standing‑wave configuration.
-  Singularity point (O):** minimal reference point where the total phase is aligned; an extremal of the action.
-  Minimal form:** triangle/tetrahedron as the smallest rigid geometry that closes phases in 2D/3D.
-  Phase‑lock (PL):** stable coincidence of phases within tolerance (\Delta\phi); macroscopic coherence.
-  Fractal folding:** self‑similar replication of nodes across scales; scale relations preserved.
-  Retention:** negative potential energy manifest as spacetime curvature; “energy stored as geometry.”
+Singularity point (O): minimal reference point where the total phase is aligned; an extremal of the action.
+Minimal form: triangle/tetrahedron as the smallest rigid geometry that closes phases in 2D/3D.
+Phase‑lock (PL): stable coincidence of phases within tolerance (\Delta\phi); macroscopic coherence.
+Fractal folding: self‑similar replication of nodes across scales; scale relations preserved.
+Retention: negative potential energy manifest as spacetime curvature; “energy stored as geometry.”
 
 
 1. Fundamental Laws (expanded)
