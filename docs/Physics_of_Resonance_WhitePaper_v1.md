@@ -2,7 +2,7 @@ PHYSICS OF RESONANCE: FROM THE SINGULARITY POINT TO THE EVENT HORIZON
 
 Author: M. Marnov (Project POSITRON–ISKORKA)
 License: CC BY 4.0
-Version: v1.0 (EN, full expanded)
+Version: v1.0 
 
 Abstract:
 
