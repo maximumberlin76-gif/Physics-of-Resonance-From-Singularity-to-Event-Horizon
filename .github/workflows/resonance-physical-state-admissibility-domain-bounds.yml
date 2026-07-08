@@ -1,0 +1,1497 @@
+name: Resonance Physical State Admissibility and Domain Bounds
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-physical-state-admissibility-domain-bounds.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-physical-state-admissibility-domain-bounds.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  state-admissibility:
+    name: Validate physical state admissibility and domain bounds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONHASHSEED: "0"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+          python -m pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q \
+            rpu_core \
+            plot_twa_results.py
+
+      - name: Validate analytical Bloch state admissibility
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              steady_state_bloch,
+          )
+
+
+          def density_matrix(
+              state,
+          ):
+              sx, sy, sz = np.asarray(
+                  state,
+                  dtype=float,
+              )
+
+              return 0.5 * np.array(
+                  [
+                      [
+                          1.0 + sz,
+                          sx - 1j * sy,
+                      ],
+                      [
+                          sx + 1j * sy,
+                          1.0 - sz,
+                      ],
+                  ],
+                  dtype=complex,
+              )
+
+
+          cases = tuple(
+              (
+                  Omega,
+                  gamma,
+                  delta,
+              )
+              for Omega in (
+                  0.25,
+                  1.0,
+                  4.0,
+              )
+              for gamma in (
+                  0.05,
+                  0.2,
+                  1.5,
+                  5.0,
+              )
+              for delta in (
+                  -3.0,
+                  -0.4,
+                  0.0,
+                  0.7,
+                  3.0,
+              )
+          )
+
+          maximum_radius = 0.0
+
+          minimum_eigenvalue = 1.0
+
+          maximum_residual = 0.0
+
+          for (
+              Omega,
+              gamma,
+              delta,
+          ) in cases:
+              stationary = (
+                  steady_state_bloch(
+                      Omega,
+                      gamma,
+                      delta,
+                  )
+              )
+
+              if stationary.shape != (
+                  3,
+              ):
+                  raise RuntimeError(
+                      "Analytical stationary "
+                      "state has invalid shape."
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      stationary
+                  )
+              ):
+                  raise RuntimeError(
+                      "Analytical stationary "
+                      "state contains "
+                      "non-finite values."
+                  )
+
+              radius = float(
+                  np.linalg.norm(
+                      stationary
+                  )
+              )
+
+              maximum_radius = max(
+                  maximum_radius,
+                  radius,
+              )
+
+              if radius > (
+                  1.0
+                  + 1.0e-12
+              ):
+                  raise RuntimeError(
+                      "Analytical stationary "
+                      "Bloch state left the "
+                      "admissible unit ball: "
+                      f"{radius:.16e}"
+                  )
+
+              rho = density_matrix(
+                  stationary
+              )
+
+              hermitian_error = float(
+                  np.max(
+                      np.abs(
+                          rho
+                          - rho.conj().T
+                      )
+                  )
+              )
+
+              if hermitian_error > 1.0e-14:
+                  raise RuntimeError(
+                      "Stationary-state density "
+                      "matrix is not Hermitian: "
+                      f"{hermitian_error:.6e}"
+                  )
+
+              trace_error = abs(
+                  np.trace(
+                      rho
+                  )
+                  - 1.0
+              )
+
+              if trace_error > 1.0e-14:
+                  raise RuntimeError(
+                      "Stationary-state density "
+                      "matrix does not have "
+                      "unit trace: "
+                      f"{trace_error:.6e}"
+                  )
+
+              eigenvalues = (
+                  np.linalg.eigvalsh(
+                      rho
+                  )
+              )
+
+              minimum_eigenvalue = min(
+                  minimum_eigenvalue,
+                  float(
+                      np.min(
+                          eigenvalues
+                      )
+                  ),
+              )
+
+              if np.min(
+                  eigenvalues
+              ) < -1.0e-12:
+                  raise RuntimeError(
+                      "Stationary-state density "
+                      "matrix has a negative "
+                      "eigenvalue: "
+                      f"{np.min(eigenvalues):.6e}"
+                  )
+
+              residual = bloch_rhs(
+                  0.0,
+                  stationary,
+                  Omega,
+                  gamma,
+                  delta,
+              )
+
+              residual_norm = float(
+                  np.linalg.norm(
+                      residual
+                  )
+              )
+
+              maximum_residual = max(
+                  maximum_residual,
+                  residual_norm,
+              )
+
+              if residual_norm > 1.0e-12:
+                  raise RuntimeError(
+                      "Analytical stationary "
+                      "state residual exceeded "
+                      "tolerance: "
+                      f"{residual_norm:.6e}"
+                  )
+
+          print(
+              f"cases={len(cases)}, "
+              f"maximum_radius="
+              f"{maximum_radius:.16e}, "
+              f"minimum_density_eigenvalue="
+              f"{minimum_eigenvalue:.16e}, "
+              f"maximum_residual="
+              f"{maximum_residual:.16e}"
+          )
+
+          print(
+              "Analytical Bloch state "
+              "admissibility: PASS"
+          )
+          PY
+
+      - name: Validate dynamical Bloch state-domain preservation
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              rk4_step,
+          )
+
+
+          def density_matrix(
+              state,
+          ):
+              sx, sy, sz = np.asarray(
+                  state,
+                  dtype=float,
+              )
+
+              return 0.5 * np.array(
+                  [
+                      [
+                          1.0 + sz,
+                          sx - 1j * sy,
+                      ],
+                      [
+                          sx + 1j * sy,
+                          1.0 - sz,
+                      ],
+                  ],
+                  dtype=complex,
+              )
+
+
+          initial_states = (
+              np.array(
+                  [
+                      0.0,
+                      0.0,
+                      -1.0,
+                  ],
+                  dtype=float,
+              ),
+              np.array(
+                  [
+                      0.0,
+                      0.0,
+                      1.0,
+                  ],
+                  dtype=float,
+              ),
+              np.array(
+                  [
+                      1.0,
+                      0.0,
+                      0.0,
+                  ],
+                  dtype=float,
+              ),
+              np.array(
+                  [
+                      -1.0,
+                      0.0,
+                      0.0,
+                  ],
+                  dtype=float,
+              ),
+              np.array(
+                  [
+                      0.0,
+                      1.0,
+                      0.0,
+                  ],
+                  dtype=float,
+              ),
+              np.array(
+                  [
+                      0.0,
+                      -1.0,
+                      0.0,
+                  ],
+                  dtype=float,
+              ),
+              np.array(
+                  [
+                      0.3,
+                      -0.4,
+                      0.5,
+                  ],
+                  dtype=float,
+              ),
+              np.array(
+                  [
+                      0.0,
+                      0.0,
+                      0.0,
+                  ],
+                  dtype=float,
+              ),
+          )
+
+          parameter_cases = (
+              (
+                  1.0,
+                  0.1,
+                  0.0,
+              ),
+              (
+                  1.0,
+                  0.2,
+                  0.35,
+              ),
+              (
+                  2.0,
+                  0.5,
+                  -0.4,
+              ),
+              (
+                  8.0,
+                  3.0,
+                  5.0,
+              ),
+          )
+
+          maximum_radius = 0.0
+
+          minimum_eigenvalue = 1.0
+
+          trajectory_count = 0
+
+          for (
+              Omega,
+              gamma,
+              delta,
+          ) in parameter_cases:
+              scale = max(
+                  abs(
+                      Omega
+                  ),
+                  abs(
+                      gamma
+                  ),
+                  abs(
+                      delta
+                  ),
+                  1.0,
+              )
+
+              dt = min(
+                  0.0025,
+                  0.02
+                  / scale,
+              )
+
+              steps = 2500
+
+              for initial_state in (
+                  initial_states
+              ):
+                  initial_radius = float(
+                      np.linalg.norm(
+                          initial_state
+                      )
+                  )
+
+                  if initial_radius > (
+                      1.0
+                      + 1.0e-15
+                  ):
+                      raise RuntimeError(
+                          "Test initial state "
+                          "is outside the "
+                          "Bloch unit ball."
+                      )
+
+                  state = (
+                      initial_state.copy()
+                  )
+
+                  t = 0.0
+
+                  trajectory_count += 1
+
+                  for step_index in range(
+                      steps
+                  ):
+                      state = rk4_step(
+                          bloch_rhs,
+                          state,
+                          t,
+                          dt,
+                          (
+                              Omega,
+                              gamma,
+                              delta,
+                          ),
+                      )
+
+                      t += dt
+
+                      if (
+                          step_index
+                          % 25
+                          != 0
+                          and step_index
+                          != steps - 1
+                      ):
+                          continue
+
+                      if not np.all(
+                          np.isfinite(
+                              state
+                          )
+                      ):
+                          raise RuntimeError(
+                              "Bloch trajectory "
+                              "produced a "
+                              "non-finite state."
+                          )
+
+                      radius = float(
+                          np.linalg.norm(
+                              state
+                          )
+                      )
+
+                      maximum_radius = max(
+                          maximum_radius,
+                          radius,
+                      )
+
+                      if radius > (
+                          1.0
+                          + 2.0e-10
+                      ):
+                          raise RuntimeError(
+                              "Bloch trajectory "
+                              "left the admissible "
+                              "unit ball: "
+                              f"Omega={Omega}, "
+                              f"gamma={gamma}, "
+                              f"delta={delta}, "
+                              f"radius="
+                              f"{radius:.16e}"
+                          )
+
+                      rho = density_matrix(
+                          state
+                      )
+
+                      hermitian_error = float(
+                          np.max(
+                              np.abs(
+                                  rho
+                                  - rho.conj().T
+                              )
+                          )
+                      )
+
+                      if hermitian_error > 1.0e-14:
+                          raise RuntimeError(
+                              "Dynamical density "
+                              "matrix lost "
+                              "Hermiticity."
+                          )
+
+                      trace_error = abs(
+                          np.trace(
+                              rho
+                          )
+                          - 1.0
+                      )
+
+                      if trace_error > 1.0e-14:
+                          raise RuntimeError(
+                              "Dynamical density "
+                              "matrix lost "
+                              "unit trace."
+                          )
+
+                      eigenvalues = (
+                          np.linalg.eigvalsh(
+                              rho
+                          )
+                      )
+
+                      minimum_eigenvalue = min(
+                          minimum_eigenvalue,
+                          float(
+                              np.min(
+                                  eigenvalues
+                              )
+                          ),
+                      )
+
+                      if np.min(
+                          eigenvalues
+                      ) < -2.0e-10:
+                          raise RuntimeError(
+                              "Dynamical density "
+                              "matrix left the "
+                              "positive-semidefinite "
+                              "domain: "
+                              f"{np.min(eigenvalues):.6e}"
+                          )
+
+          print(
+              f"trajectories="
+              f"{trajectory_count}, "
+              f"maximum_radius="
+              f"{maximum_radius:.16e}, "
+              f"minimum_density_eigenvalue="
+              f"{minimum_eigenvalue:.16e}"
+          )
+
+          print(
+              "Dynamical Bloch state-domain "
+              "preservation: PASS"
+          )
+          PY
+
+      - name: Validate extreme finite Bloch state admissibility
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              rk4_step,
+          )
+
+
+          cases = (
+              (
+                  100.0,
+                  50.0,
+                  25.0,
+                  1.0e-4,
+                  1000,
+              ),
+              (
+                  25.0,
+                  0.5,
+                  -20.0,
+                  2.0e-4,
+                  2000,
+              ),
+              (
+                  0.2,
+                  5.0,
+                  3.0,
+                  5.0e-4,
+                  2000,
+              ),
+          )
+
+          initial_state = np.array(
+              [
+                  0.25,
+                  -0.15,
+                  -0.85,
+              ],
+              dtype=float,
+          )
+
+          for (
+              Omega,
+              gamma,
+              delta,
+              dt,
+              steps,
+          ) in cases:
+              state = (
+                  initial_state.copy()
+              )
+
+              t = 0.0
+
+              maximum_radius = float(
+                  np.linalg.norm(
+                      state
+                  )
+              )
+
+              for _ in range(
+                  steps
+              ):
+                  state = rk4_step(
+                      bloch_rhs,
+                      state,
+                      t,
+                      dt,
+                      (
+                          Omega,
+                          gamma,
+                          delta,
+                      ),
+                  )
+
+                  t += dt
+
+                  if not np.all(
+                      np.isfinite(
+                          state
+                      )
+                  ):
+                      raise RuntimeError(
+                          "Extreme finite "
+                          "Bloch integration "
+                          "produced a "
+                          "non-finite state."
+                      )
+
+                  radius = float(
+                      np.linalg.norm(
+                          state
+                      )
+                  )
+
+                  maximum_radius = max(
+                      maximum_radius,
+                      radius,
+                  )
+
+                  if radius > (
+                      1.0
+                      + 2.0e-9
+                  ):
+                      raise RuntimeError(
+                          "Extreme finite "
+                          "Bloch integration "
+                          "left the admissible "
+                          "unit ball: "
+                          f"Omega={Omega}, "
+                          f"gamma={gamma}, "
+                          f"delta={delta}, "
+                          f"radius={radius:.16e}"
+                      )
+
+              print(
+                  f"Omega={Omega:g}, "
+                  f"gamma={gamma:g}, "
+                  f"delta={delta:g}, "
+                  f"maximum_radius="
+                  f"{maximum_radius:.16e}"
+              )
+
+          print(
+              "Extreme finite Bloch state "
+              "admissibility: PASS"
+          )
+          PY
+
+      - name: Validate generated Bloch CSV state domain
+        run: |
+          python - <<'PY'
+          import csv
+          import tempfile
+          from pathlib import Path
+
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              generate_trajectories,
+          )
+
+
+          ratios = (
+              0.05,
+              0.10,
+              0.20,
+              0.50,
+              1.00,
+              2.00,
+          )
+
+          initial_state = np.array(
+              [
+                  0.15,
+                  -0.05,
+                  -0.95,
+              ],
+              dtype=float,
+          )
+
+          required_columns = (
+              "t",
+              "sx",
+              "sy",
+              "sz",
+          )
+
+          with tempfile.TemporaryDirectory() as tmp:
+              output_directory = Path(
+                  tmp
+              )
+
+              results = (
+                  generate_trajectories(
+                      Omega=1.0,
+                      gamma_ratios=ratios,
+                      delta=0.35,
+                      periods=8.0,
+                      dt=0.005,
+                      s0=initial_state,
+                      output_dir=(
+                          output_directory
+                      ),
+                      stamp="admissibility",
+                  )
+              )
+
+              files = sorted(
+                  output_directory.glob(
+                      "*.csv"
+                  )
+              )
+
+              if len(
+                  results
+              ) != len(
+                  ratios
+              ):
+                  raise RuntimeError(
+                      "Unexpected Bloch "
+                      "generation-result count."
+                  )
+
+              if len(
+                  files
+              ) != len(
+                  ratios
+              ):
+                  raise RuntimeError(
+                      "Unexpected Bloch "
+                      "CSV artifact count."
+                  )
+
+              maximum_radius = 0.0
+
+              total_rows = 0
+
+              for file_path in (
+                  files
+              ):
+                  with file_path.open(
+                      "r",
+                      encoding="utf-8",
+                      newline="",
+                  ) as handle:
+                      reader = csv.DictReader(
+                          handle
+                      )
+
+                      if tuple(
+                          reader.fieldnames
+                          or ()
+                      ) != required_columns:
+                          raise RuntimeError(
+                              "Unexpected CSV "
+                              "header in "
+                              f"{file_path}."
+                          )
+
+                      rows = [
+                          [
+                              float(
+                                  row[
+                                      column
+                                  ]
+                              )
+                              for column
+                              in required_columns
+                          ]
+                          for row
+                          in reader
+                      ]
+
+                  data = np.asarray(
+                      rows,
+                      dtype=float,
+                  )
+
+                  if (
+                      data.ndim != 2
+                      or data.shape[
+                          1
+                      ]
+                      != 4
+                      or data.shape[
+                          0
+                      ]
+                      < 2
+                  ):
+                      raise RuntimeError(
+                          "Invalid CSV "
+                          "trajectory shape: "
+                          f"{data.shape}"
+                      )
+
+                  if not np.all(
+                      np.isfinite(
+                          data
+                      )
+                  ):
+                      raise RuntimeError(
+                          "Generated Bloch "
+                          "CSV contains "
+                          "non-finite values."
+                      )
+
+                  if not np.all(
+                      np.diff(
+                          data[
+                              :,
+                              0,
+                          ]
+                      )
+                      > 0.0
+                  ):
+                      raise RuntimeError(
+                          "Generated Bloch "
+                          "CSV time is not "
+                          "strictly increasing."
+                      )
+
+                  state_data = data[
+                      :,
+                      1:
+                  ]
+
+                  radii = np.linalg.norm(
+                      state_data,
+                      axis=1,
+                  )
+
+                  file_maximum_radius = float(
+                      np.max(
+                          radii
+                      )
+                  )
+
+                  maximum_radius = max(
+                      maximum_radius,
+                      file_maximum_radius,
+                  )
+
+                  if np.any(
+                      radii
+                      > (
+                          1.0
+                          + 2.0e-9
+                      )
+                  ):
+                      raise RuntimeError(
+                          "Generated Bloch "
+                          "CSV contains a state "
+                          "outside the "
+                          "admissible unit ball: "
+                          f"{file_path}, "
+                          f"maximum_radius="
+                          f"{file_maximum_radius:.16e}"
+                      )
+
+                  total_rows += int(
+                      data.shape[
+                          0
+                      ]
+                  )
+
+              print(
+                  f"files={len(files)}, "
+                  f"rows={total_rows}, "
+                  f"maximum_radius="
+                  f"{maximum_radius:.16e}"
+              )
+
+          print(
+              "Generated Bloch CSV "
+              "state-domain validation: PASS"
+          )
+          PY
+
+      - name: Validate RPU compact phase domain
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 64
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          profiles = (
+              (
+                  "uniform",
+                  np.full(
+                      num_nodes,
+                      TAU,
+                  ),
+                  np.full(
+                      num_nodes,
+                      0.25,
+                  ),
+              ),
+              (
+                  "detuned",
+                  TAU
+                  * np.linspace(
+                      0.4,
+                      1.6,
+                      num_nodes,
+                  ),
+                  np.linspace(
+                      0.0,
+                      2.0,
+                      num_nodes,
+                  ),
+              ),
+              (
+                  "asymmetric",
+                  TAU
+                  * (
+                      1.0
+                      + 0.25
+                      * np.sin(
+                          3.0 * x
+                      )
+                      + 0.10
+                      * np.cos(
+                          11.0 * x
+                      )
+                  ),
+                  0.10
+                  + 0.90
+                  * (
+                      0.5
+                      + 0.5
+                      * np.sin(
+                          5.0 * x
+                          + 0.7
+                      )
+                  ),
+              ),
+              (
+                  "extreme-finite",
+                  TAU
+                  * (
+                      1.0
+                      + 3.0
+                      * np.sin(
+                          3.0 * x
+                      )
+                      + 1.5
+                      * np.cos(
+                          11.0 * x
+                      )
+                  ),
+                  np.full(
+                      num_nodes,
+                      1.0e5,
+                  ),
+              ),
+          )
+
+          for profile_index, (
+              profile_name,
+              frequency_profile,
+              amplitude_profile,
+          ) in enumerate(
+              profiles
+          ):
+              core = RPUCore(
+                  num_nodes,
+                  seed=(
+                      76
+                      + profile_index
+                  ),
+                  dt=0.005,
+                  sigma=0.02,
+                  ternary=True,
+                  anti_R=0.97,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              for chunk_index in range(
+                  20
+              ):
+                  core.step(
+                      50,
+                      stability_guard=True,
+                  )
+
+                  if not np.all(
+                      np.isfinite(
+                          core.theta
+                      )
+                  ):
+                      raise RuntimeError(
+                          "RPU phase state "
+                          "contains non-finite "
+                          "values in profile "
+                          f"{profile_name}, "
+                          f"chunk={chunk_index}."
+                      )
+
+                  if not np.all(
+                      np.isfinite(
+                          core.ext_phase
+                      )
+                  ):
+                      raise RuntimeError(
+                          "RPU external phase "
+                          "contains non-finite "
+                          "values in profile "
+                          f"{profile_name}."
+                      )
+
+                  if not (
+                      np.all(
+                          core.theta
+                          >= 0.0
+                      )
+                      and np.all(
+                          core.theta
+                          < TAU
+                      )
+                  ):
+                      raise RuntimeError(
+                          "RPU phase state left "
+                          "the compact interval "
+                          "[0, 2pi)."
+                      )
+
+                  if not (
+                      np.all(
+                          core.ext_phase
+                          >= 0.0
+                      )
+                      and np.all(
+                          core.ext_phase
+                          < TAU
+                      )
+                  ):
+                      raise RuntimeError(
+                          "RPU external phase "
+                          "left the compact "
+                          "interval [0, 2pi)."
+                      )
+
+                  if not np.all(
+                      np.isfinite(
+                          core.W
+                      )
+                  ):
+                      raise RuntimeError(
+                          "RPU coupling matrix "
+                          "contains non-finite "
+                          "values."
+                      )
+
+                  if not np.all(
+                      np.isin(
+                          core.s,
+                          (
+                              -1,
+                              0,
+                              1,
+                          ),
+                      )
+                  ):
+                      raise RuntimeError(
+                          "RPU dynamic state "
+                          "left the balanced "
+                          "ternary domain."
+                      )
+
+                  if not np.all(
+                      np.isin(
+                          core.Wq,
+                          (
+                              -1,
+                              0,
+                              1,
+                          ),
+                      )
+                  ):
+                      raise RuntimeError(
+                          "RPU quantized coupling "
+                          "matrix left the "
+                          "balanced ternary domain."
+                      )
+
+                  order = core.measure(
+                      "order"
+                  )
+
+                  coherence = float(
+                      order[
+                          "R"
+                      ]
+                  )
+
+                  mean_phase = float(
+                      order[
+                          "phi"
+                      ]
+                  )
+
+                  if not (
+                      0.0
+                      <= coherence
+                      <= (
+                          1.0
+                          + 1.0e-12
+                      )
+                  ):
+                      raise RuntimeError(
+                          "RPU coherence left "
+                          "the admissible "
+                          "interval [0, 1]."
+                      )
+
+                  if not np.isfinite(
+                      mean_phase
+                  ):
+                      raise RuntimeError(
+                          "RPU mean phase "
+                          "became non-finite."
+                      )
+
+                  if not (
+                      -np.pi
+                      - 1.0e-12
+                      <= mean_phase
+                      <= np.pi
+                      + 1.0e-12
+                  ):
+                      raise RuntimeError(
+                          "RPU mean phase left "
+                          "the principal phase "
+                          "interval."
+                      )
+
+                  if (
+                      not np.isfinite(
+                          core.dt
+                      )
+                      or core.dt
+                      <= 0.0
+                  ):
+                      raise RuntimeError(
+                          "RPU timestep left "
+                          "the positive finite "
+                          "domain."
+                      )
+
+                  if (
+                      not np.isfinite(
+                          core.t
+                      )
+                      or core.t
+                      <= 0.0
+                  ):
+                      raise RuntimeError(
+                          "RPU integration time "
+                          "left the positive "
+                          "finite domain."
+                      )
+
+              final_order = core.measure(
+                  "order"
+              )
+
+              print(
+                  f"profile={profile_name}, "
+                  f"R="
+                  f"{final_order['R']:.12f}, "
+                  f"phi="
+                  f"{final_order['phi']:.12f}, "
+                  f"dt={core.dt:.12e}, "
+                  f"t={core.t:.12e}"
+              )
+
+          print(
+              "RPU compact phase-domain "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate RPU measurement-domain closure
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 96
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              sigma=0.01,
+              ternary=True,
+          )
+
+          for cycle in range(
+              50
+          ):
+              core.step(
+                  20,
+                  stability_guard=True,
+              )
+
+              order = core.measure(
+                  "order"
+              )
+
+              clusters = core.measure(
+                  "clusters"
+              )
+
+              phases = core.measure(
+                  "phases"
+              )
+
+              ternary = core.measure(
+                  "ternary"
+              )
+
+              coherence = float(
+                  order[
+                      "R"
+                  ]
+              )
+
+              mean_phase = float(
+                  order[
+                      "phi"
+                  ]
+              )
+
+              if not (
+                  0.0
+                  <= coherence
+                  <= (
+                      1.0
+                      + 1.0e-12
+                  )
+              ):
+                  raise RuntimeError(
+                      "Measured coherence "
+                      "left [0, 1]."
+                  )
+
+              if not (
+                  -np.pi
+                  - 1.0e-12
+                  <= mean_phase
+                  <= np.pi
+                  + 1.0e-12
+              ):
+                  raise RuntimeError(
+                      "Measured mean phase "
+                      "left the principal "
+                      "phase interval."
+                  )
+
+              labels = np.asarray(
+                  clusters[
+                      "labels"
+                  ]
+              )
+
+              if labels.shape != (
+                  num_nodes,
+              ):
+                  raise RuntimeError(
+                      "Cluster measurement "
+                      "has invalid shape."
+                  )
+
+              if not np.all(
+                  np.isin(
+                      labels,
+                      (
+                          -1,
+                          0,
+                          1,
+                      ),
+                  )
+              ):
+                  raise RuntimeError(
+                      "Cluster measurement "
+                      "left its discrete domain."
+                  )
+
+              theta = np.asarray(
+                  phases[
+                      "theta"
+                  ],
+                  dtype=float,
+              )
+
+              if theta.shape != (
+                  num_nodes,
+              ):
+                  raise RuntimeError(
+                      "Phase measurement "
+                      "has invalid shape."
+                  )
+
+              if not (
+                  np.all(
+                      theta
+                      >= 0.0
+                  )
+                  and np.all(
+                      theta
+                      < TAU
+                  )
+              ):
+                  raise RuntimeError(
+                      "Measured phases left "
+                      "the compact interval "
+                      "[0, 2pi)."
+                  )
+
+              states = np.asarray(
+                  ternary[
+                      "s"
+                  ]
+              )
+
+              if not np.all(
+                  np.isin(
+                      states,
+                      (
+                          -1,
+                          0,
+                          1,
+                      ),
+                  )
+              ):
+                  raise RuntimeError(
+                      "Measured ternary state "
+                      "left {-1, 0, 1}."
+                  )
+
+              weight_count = ternary[
+                  "Wq_nnz"
+              ]
+
+              if not isinstance(
+                  weight_count,
+                  int,
+              ):
+                  raise RuntimeError(
+                      "Quantized-weight count "
+                      "is not an integer."
+                  )
+
+              if not (
+                  0
+                  <= weight_count
+                  <= num_nodes
+                  * num_nodes
+              ):
+                  raise RuntimeError(
+                      "Quantized-weight count "
+                      "left its valid domain."
+                  )
+
+          print(
+              "RPU measurement-domain "
+              "closure: PASS"
+          )
+          PY
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during state-admissibility validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report state-admissibility result
+        run: |
+          echo "Resonance physical state admissibility and domain bounds validation: PASS"
