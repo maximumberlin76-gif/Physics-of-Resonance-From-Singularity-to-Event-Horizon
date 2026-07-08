@@ -1,0 +1,1434 @@
+name: Resonance Edge Cases and Failure Modes
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-edge-cases-failure-modes.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-edge-cases-failure-modes.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  edge-cases:
+    name: Validate edge cases and controlled failure modes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      MPLBACKEND: Agg
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy matplotlib
+          python -m pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q \
+            rpu_core \
+            plot_twa_results.py
+
+      - name: Validate low-level numerical input rejection
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import (
+              power_iteration_radius,
+              quantize_balanced,
+              quantize_W,
+          )
+
+
+          def expect_raises(
+              exception_type,
+              function,
+              *args,
+              **kwargs,
+          ):
+              try:
+                  function(
+                      *args,
+                      **kwargs,
+                  )
+
+              except exception_type:
+                  return
+
+              except Exception as exc:
+                  raise RuntimeError(
+                      "Unexpected exception type: "
+                      f"{type(exc).__name__}: {exc}"
+                  ) from exc
+
+              raise RuntimeError(
+                  "Expected exception was not raised: "
+                  f"{exception_type.__name__}"
+              )
+
+
+          expect_raises(
+              ValueError,
+              power_iteration_radius,
+              np.zeros(
+                  (
+                      2,
+                      3,
+                  )
+              ),
+          )
+
+          expect_raises(
+              ValueError,
+              power_iteration_radius,
+              np.empty(
+                  (
+                      0,
+                      0,
+                  )
+              ),
+          )
+
+          expect_raises(
+              ValueError,
+              power_iteration_radius,
+              np.eye(
+                  3
+              ),
+              0,
+          )
+
+          expect_raises(
+              ValueError,
+              quantize_balanced,
+              np.array(
+                  [
+                      -1.0,
+                      0.0,
+                      1.0,
+                  ]
+              ),
+              t1=-0.1,
+          )
+
+          expect_raises(
+              ValueError,
+              quantize_balanced,
+              np.array(
+                  [
+                      -1.0,
+                      0.0,
+                      1.0,
+                  ]
+              ),
+              t1=np.nan,
+          )
+
+          expect_raises(
+              ValueError,
+              quantize_W,
+              np.eye(
+                  3
+              ),
+              thresh=-0.1,
+          )
+
+          expect_raises(
+              ValueError,
+              quantize_W,
+              np.eye(
+                  3
+              ),
+              thresh=np.inf,
+          )
+
+          print(
+              "Low-level numerical input "
+              "rejection validation: PASS"
+          )
+          PY
+
+      - name: Validate RPU constructor failure modes
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          invalid_cases = (
+              (
+                  "zero node count",
+                  lambda: RPUCore(
+                      0
+                  ),
+              ),
+              (
+                  "negative node count",
+                  lambda: RPUCore(
+                      -8
+                  ),
+              ),
+              (
+                  "zero timestep",
+                  lambda: RPUCore(
+                      8,
+                      dt=0.0,
+                  ),
+              ),
+              (
+                  "negative timestep",
+                  lambda: RPUCore(
+                      8,
+                      dt=-0.01,
+                  ),
+              ),
+              (
+                  "non-finite timestep",
+                  lambda: RPUCore(
+                      8,
+                      dt=np.nan,
+                  ),
+              ),
+              (
+                  "negative noise",
+                  lambda: RPUCore(
+                      8,
+                      sigma=-0.01,
+                  ),
+              ),
+              (
+                  "negative weight threshold",
+                  lambda: RPUCore(
+                      8,
+                      wq_thresh=-0.1,
+                  ),
+              ),
+              (
+                  "negative state threshold",
+                  lambda: RPUCore(
+                      8,
+                      state_tau=-0.1,
+                  ),
+              ),
+              (
+                  "negative matrix threshold",
+                  lambda: RPUCore(
+                      8,
+                      threshold=-0.1,
+                  ),
+              ),
+              (
+                  "non-finite modulation frequency",
+                  lambda: RPUCore(
+                      8,
+                      mod_amp_freq=np.nan,
+                  ),
+              ),
+              (
+                  "negative anti-lock duration",
+                  lambda: RPUCore(
+                      8,
+                      anti_duration=-1,
+                  ),
+              ),
+              (
+                  "negative anti-lock noise boost",
+                  lambda: RPUCore(
+                      8,
+                      anti_sigma_boost=-0.01,
+                  ),
+              ),
+          )
+
+          for (
+              case_name,
+              constructor,
+          ) in invalid_cases:
+              try:
+                  constructor()
+
+              except ValueError:
+                  print(
+                      f"Rejected: {case_name}"
+                  )
+
+              else:
+                  raise RuntimeError(
+                      "Invalid RPU constructor "
+                      "input was accepted: "
+                      f"{case_name}"
+                  )
+
+          print(
+              "RPU constructor failure-mode "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate RPU API rejection and state preservation
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          num_nodes = 24
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              sigma=0.0,
+          )
+
+          snapshot = {
+              "ext_freq": core.ext_freq.copy(),
+              "ext_amp": core.ext_amp.copy(),
+              "ext_phase": core.ext_phase.copy(),
+              "theta": core.theta.copy(),
+              "W": core.W.copy(),
+              "Wq": core.Wq.copy(),
+              "s": core.s.copy(),
+              "t": core.t,
+              "dt": core.dt,
+          }
+
+
+          def assert_unchanged():
+              np.testing.assert_array_equal(
+                  core.ext_freq,
+                  snapshot[
+                      "ext_freq"
+                  ],
+              )
+
+              np.testing.assert_array_equal(
+                  core.ext_amp,
+                  snapshot[
+                      "ext_amp"
+                  ],
+              )
+
+              np.testing.assert_array_equal(
+                  core.ext_phase,
+                  snapshot[
+                      "ext_phase"
+                  ],
+              )
+
+              np.testing.assert_array_equal(
+                  core.theta,
+                  snapshot[
+                      "theta"
+                  ],
+              )
+
+              np.testing.assert_array_equal(
+                  core.W,
+                  snapshot[
+                      "W"
+                  ],
+              )
+
+              np.testing.assert_array_equal(
+                  core.Wq,
+                  snapshot[
+                      "Wq"
+                  ],
+              )
+
+              np.testing.assert_array_equal(
+                  core.s,
+                  snapshot[
+                      "s"
+                  ],
+              )
+
+              if core.t != snapshot[
+                  "t"
+              ]:
+                  raise RuntimeError(
+                      "Rejected input changed "
+                      "integration time."
+                  )
+
+              if core.dt != snapshot[
+                  "dt"
+              ]:
+                  raise RuntimeError(
+                      "Rejected input changed "
+                      "integration timestep."
+                  )
+
+
+          try:
+              core.lock(
+                  freq_profile=np.zeros(
+                      num_nodes - 1
+                  )
+              )
+
+          except ValueError:
+              pass
+
+          else:
+              raise RuntimeError(
+                  "Invalid frequency-profile "
+                  "size was accepted."
+              )
+
+          assert_unchanged()
+
+          invalid_amplitude = np.zeros(
+              num_nodes
+          )
+
+          invalid_amplitude[
+              3
+          ] = np.nan
+
+          try:
+              core.lock(
+                  amp_profile=(
+                      invalid_amplitude
+                  )
+              )
+
+          except ValueError:
+              pass
+
+          else:
+              raise RuntimeError(
+                  "Non-finite amplitude profile "
+                  "was accepted."
+              )
+
+          assert_unchanged()
+
+          try:
+              core.reset_phases(
+                  np.zeros(
+                      num_nodes - 1
+                  )
+              )
+
+          except ValueError:
+              pass
+
+          else:
+              raise RuntimeError(
+                  "Invalid phase-profile size "
+                  "was accepted."
+              )
+
+          assert_unchanged()
+
+          try:
+              core.mix(
+                  np.zeros(
+                      num_nodes
+                  ),
+                  np.zeros(
+                      num_nodes - 1
+                  ),
+              )
+
+          except ValueError:
+              pass
+
+          else:
+              raise RuntimeError(
+                  "Mismatched mix profiles "
+                  "were accepted."
+              )
+
+          assert_unchanged()
+
+          try:
+              core.imprint(
+                  np.ones(
+                      num_nodes
+                  )
+              )
+
+          except ValueError:
+              pass
+
+          else:
+              raise RuntimeError(
+                  "Zero-variance imprint "
+                  "pattern was accepted."
+              )
+
+          assert_unchanged()
+
+          try:
+              core.measure(
+                  "unknown"
+              )
+
+          except ValueError:
+              pass
+
+          else:
+              raise RuntimeError(
+                  "Unknown measurement kind "
+                  "was accepted."
+              )
+
+          assert_unchanged()
+
+          try:
+              core.step(
+                  -1
+              )
+
+          except ValueError:
+              pass
+
+          else:
+              raise RuntimeError(
+                  "Negative step count "
+                  "was accepted."
+              )
+
+          assert_unchanged()
+
+          print(
+              "RPU rejected-input state "
+              "preservation validation: PASS"
+          )
+          PY
+
+      - name: Validate extreme finite RPU drive handling
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          num_nodes = 32
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              dt=0.005,
+              sigma=0.0,
+              ternary=True,
+              anti_R=2.0,
+          )
+
+          core.lock(
+              freq_profile=np.full(
+                  num_nodes,
+                  2.0 * np.pi,
+              ),
+              amp_profile=np.full(
+                  num_nodes,
+                  1.0e6,
+              ),
+              reset_phase=True,
+          )
+
+          original_dt = core.dt
+
+          core.step(
+              25,
+              stability_guard=True,
+          )
+
+          if not np.all(
+              np.isfinite(
+                  core.theta
+              )
+          ):
+              raise RuntimeError(
+                  "Extreme finite drive "
+                  "produced non-finite phases."
+              )
+
+          if not np.all(
+              np.isfinite(
+                  core.ext_phase
+              )
+          ):
+              raise RuntimeError(
+                  "Extreme finite drive "
+                  "produced non-finite "
+                  "external phases."
+              )
+
+          if not np.all(
+              np.isin(
+                  core.s,
+                  (
+                      -1,
+                      0,
+                      1,
+                  ),
+              )
+          ):
+              raise RuntimeError(
+                  "Extreme finite drive "
+                  "produced invalid "
+                  "ternary states."
+              )
+
+          if (
+              not np.isfinite(
+                  core.dt
+              )
+              or core.dt <= 0.0
+          ):
+              raise RuntimeError(
+                  "Stability guard produced "
+                  "an invalid timestep."
+              )
+
+          if core.dt >= original_dt:
+              raise RuntimeError(
+                  "Stability guard did not "
+                  "reduce the timestep under "
+                  "extreme finite drive."
+              )
+
+          if (
+              not np.isfinite(
+                  core.t
+              )
+              or core.t <= 0.0
+          ):
+              raise RuntimeError(
+                  "Extreme finite drive "
+                  "produced invalid "
+                  "integration time."
+              )
+
+          order = core.measure(
+              "order"
+          )
+
+          if not (
+              0.0
+              <= order[
+                  "R"
+              ]
+              <= 1.0 + 1.0e-12
+          ):
+              raise RuntimeError(
+                  "Order parameter left "
+                  "the valid numerical range."
+              )
+
+          print(
+              f"original_dt={original_dt:.6e}, "
+              f"guarded_dt={core.dt:.6e}, "
+              f"R={order['R']:.6f}"
+          )
+
+          print(
+              "Extreme finite RPU drive "
+              "handling validation: PASS"
+          )
+          PY
+
+      - name: Validate Bloch parameter failure modes
+        run: |
+          python - <<'PY'
+          import argparse
+
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              Params,
+              bloch_rhs,
+              build_output_name,
+              generate_trajectories,
+              parse_gamma_ratios,
+              rk4_step,
+              steady_state_bloch,
+          )
+
+
+          def expect_raises(
+              exception_type,
+              function,
+              *args,
+              **kwargs,
+          ):
+              try:
+                  function(
+                      *args,
+                      **kwargs,
+                  )
+
+              except exception_type:
+                  return
+
+              except Exception as exc:
+                  raise RuntimeError(
+                      "Unexpected exception type: "
+                      f"{type(exc).__name__}: {exc}"
+                  ) from exc
+
+              raise RuntimeError(
+                  "Expected exception was not raised: "
+                  f"{exception_type.__name__}"
+              )
+
+
+          valid_state = np.array(
+              [
+                  0.0,
+                  0.0,
+                  -1.0,
+              ],
+              dtype=float,
+          )
+
+          invalid_params = (
+              Params(
+                  Omega=0.0,
+                  gamma=0.2,
+                  delta=0.0,
+                  T=1.0,
+                  dt=0.01,
+                  s0=valid_state,
+              ),
+              Params(
+                  Omega=-1.0,
+                  gamma=0.2,
+                  delta=0.0,
+                  T=1.0,
+                  dt=0.01,
+                  s0=valid_state,
+              ),
+              Params(
+                  Omega=1.0,
+                  gamma=0.0,
+                  delta=0.0,
+                  T=1.0,
+                  dt=0.01,
+                  s0=valid_state,
+              ),
+              Params(
+                  Omega=1.0,
+                  gamma=-0.2,
+                  delta=0.0,
+                  T=1.0,
+                  dt=0.01,
+                  s0=valid_state,
+              ),
+              Params(
+                  Omega=1.0,
+                  gamma=0.2,
+                  delta=np.nan,
+                  T=1.0,
+                  dt=0.01,
+                  s0=valid_state,
+              ),
+              Params(
+                  Omega=1.0,
+                  gamma=0.2,
+                  delta=0.0,
+                  T=0.0,
+                  dt=0.01,
+                  s0=valid_state,
+              ),
+              Params(
+                  Omega=1.0,
+                  gamma=0.2,
+                  delta=0.0,
+                  T=1.0,
+                  dt=0.0,
+                  s0=valid_state,
+              ),
+              Params(
+                  Omega=1.0,
+                  gamma=0.2,
+                  delta=0.0,
+                  T=0.1,
+                  dt=0.2,
+                  s0=valid_state,
+              ),
+              Params(
+                  Omega=1.0,
+                  gamma=0.2,
+                  delta=0.0,
+                  T=1.0,
+                  dt=0.01,
+                  s0=np.zeros(
+                      2
+                  ),
+              ),
+              Params(
+                  Omega=1.0,
+                  gamma=0.2,
+                  delta=0.0,
+                  T=1.0,
+                  dt=0.01,
+                  s0=np.array(
+                      [
+                          0.0,
+                          np.inf,
+                          -1.0,
+                      ]
+                  ),
+              ),
+          )
+
+          for params in invalid_params:
+              expect_raises(
+                  ValueError,
+                  params.validated,
+              )
+
+          expect_raises(
+              ValueError,
+              bloch_rhs,
+              0.0,
+              np.zeros(
+                  2
+              ),
+              1.0,
+              0.2,
+              0.0,
+          )
+
+          expect_raises(
+              ValueError,
+              bloch_rhs,
+              0.0,
+              valid_state,
+              1.0,
+              0.0,
+              0.0,
+          )
+
+          expect_raises(
+              ValueError,
+              bloch_rhs,
+              0.0,
+              valid_state,
+              1.0,
+              0.2,
+              np.nan,
+          )
+
+          expect_raises(
+              ValueError,
+              steady_state_bloch,
+              1.0,
+              0.0,
+              0.0,
+          )
+
+          expect_raises(
+              ValueError,
+              rk4_step,
+              bloch_rhs,
+              np.zeros(
+                  2
+              ),
+              0.0,
+              0.01,
+              (
+                  1.0,
+                  0.2,
+                  0.0,
+              ),
+          )
+
+          expect_raises(
+              ValueError,
+              rk4_step,
+              bloch_rhs,
+              valid_state,
+              0.0,
+              0.0,
+              (
+                  1.0,
+                  0.2,
+                  0.0,
+              ),
+          )
+
+
+          def nonfinite_rhs(
+              t,
+              state,
+          ):
+              del t
+              return np.full_like(
+                  state,
+                  np.nan,
+              )
+
+
+          expect_raises(
+              FloatingPointError,
+              rk4_step,
+              nonfinite_rhs,
+              valid_state,
+              0.0,
+              0.01,
+              (),
+          )
+
+
+          def wrong_shape_rhs(
+              t,
+              state,
+          ):
+              del t
+              del state
+              return np.zeros(
+                  2
+              )
+
+
+          expect_raises(
+              ValueError,
+              rk4_step,
+              wrong_shape_rhs,
+              valid_state,
+              0.0,
+              0.01,
+              (),
+          )
+
+          expect_raises(
+              argparse.ArgumentTypeError,
+              parse_gamma_ratios,
+              "",
+          )
+
+          expect_raises(
+              argparse.ArgumentTypeError,
+              parse_gamma_ratios,
+              "-0.1,0.2",
+          )
+
+          expect_raises(
+              argparse.ArgumentTypeError,
+              parse_gamma_ratios,
+              "abc",
+          )
+
+          expect_raises(
+              ValueError,
+              build_output_name,
+              1.0,
+              0.2,
+              "///",
+          )
+
+          expect_raises(
+              ValueError,
+              generate_trajectories,
+              0.0,
+              (
+                  0.1,
+              ),
+              0.0,
+              1.0,
+              0.01,
+              valid_state,
+              ".",
+              "edge",
+          )
+
+          expect_raises(
+              ValueError,
+              generate_trajectories,
+              1.0,
+              (
+                  -0.1,
+              ),
+              0.0,
+              1.0,
+              0.01,
+              valid_state,
+              ".",
+              "edge",
+          )
+
+          print(
+              "Bloch parameter failure-mode "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate failure isolation before Bloch output creation
+        run: |
+          python - <<'PY'
+          import tempfile
+          from pathlib import Path
+
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              Params,
+              run,
+          )
+
+
+          with tempfile.TemporaryDirectory() as tmp:
+              output = (
+                  Path(
+                      tmp
+                  )
+                  / "must_not_exist.csv"
+              )
+
+              invalid = Params(
+                  Omega=0.0,
+                  gamma=0.2,
+                  delta=0.0,
+                  T=1.0,
+                  dt=0.01,
+                  s0=np.array(
+                      [
+                          0.0,
+                          0.0,
+                          -1.0,
+                      ],
+                      dtype=float,
+                  ),
+              )
+
+              try:
+                  run(
+                      invalid,
+                      output,
+                  )
+
+              except ValueError:
+                  pass
+
+              else:
+                  raise RuntimeError(
+                      "Invalid Bloch parameters "
+                      "were accepted."
+                  )
+
+              if output.exists():
+                  raise RuntimeError(
+                      "Rejected Bloch input "
+                      "created a partial "
+                      "output artifact."
+                  )
+
+          print(
+              "Bloch failure-isolation "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate extreme finite Bloch integration
+        run: |
+          python - <<'PY'
+          import tempfile
+          from pathlib import Path
+
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              Params,
+              run,
+          )
+
+
+          with tempfile.TemporaryDirectory() as tmp:
+              output = (
+                  Path(
+                      tmp
+                  )
+                  / "extreme_finite.csv"
+              )
+
+              result = run(
+                  Params(
+                      Omega=100.0,
+                      gamma=50.0,
+                      delta=25.0,
+                      T=0.01,
+                      dt=0.0001,
+                      s0=np.array(
+                          [
+                              0.25,
+                              -0.15,
+                              -0.85,
+                          ],
+                          dtype=float,
+                      ),
+                  ),
+                  output,
+              )
+
+              final_state = np.asarray(
+                  result[
+                      "final_state"
+                  ],
+                  dtype=float,
+              )
+
+              stationary_state = np.asarray(
+                  result[
+                      "stationary_state"
+                  ],
+                  dtype=float,
+              )
+
+              if not output.is_file():
+                  raise RuntimeError(
+                      "Extreme finite Bloch run "
+                      "did not create output."
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      final_state
+                  )
+              ):
+                  raise RuntimeError(
+                      "Extreme finite Bloch run "
+                      "produced non-finite state."
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      stationary_state
+                  )
+              ):
+                  raise RuntimeError(
+                      "Extreme finite Bloch run "
+                      "produced non-finite "
+                      "stationary state."
+                  )
+
+              if result[
+                  "rows"
+              ] != 101:
+                  raise RuntimeError(
+                      "Extreme finite Bloch run "
+                      "produced an unexpected "
+                      "row count: "
+                      f"{result['rows']}"
+                  )
+
+              if (
+                  not np.isfinite(
+                      result[
+                          "stationary_error_l2"
+                      ]
+                  )
+                  or result[
+                      "stationary_error_l2"
+                  ] < 0.0
+              ):
+                  raise RuntimeError(
+                      "Extreme finite Bloch run "
+                      "produced invalid error."
+                  )
+
+          print(
+              "Extreme finite Bloch integration "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate corrupted CSV rejection
+        run: |
+          python - <<'PY'
+          import tempfile
+          from pathlib import Path
+
+          import numpy as np
+
+          from plot_twa_results import (
+              discover_csv_files,
+              load_csv,
+              validate_trajectory_set,
+          )
+
+
+          def expect_raises(
+              exception_type,
+              function,
+              *args,
+              **kwargs,
+          ):
+              try:
+                  function(
+                      *args,
+                      **kwargs,
+                  )
+
+              except exception_type:
+                  return
+
+              except Exception as exc:
+                  raise RuntimeError(
+                      "Unexpected exception type: "
+                      f"{type(exc).__name__}: {exc}"
+                  ) from exc
+
+              raise RuntimeError(
+                  "Expected exception was not raised: "
+                  f"{exception_type.__name__}"
+              )
+
+
+          with tempfile.TemporaryDirectory() as tmp:
+              root = Path(
+                  tmp
+              )
+
+              expect_raises(
+                  FileNotFoundError,
+                  load_csv,
+                  root
+                  / "missing.csv",
+              )
+
+              missing_directory = (
+                  root
+                  / "missing_directory"
+              )
+
+              expect_raises(
+                  FileNotFoundError,
+                  discover_csv_files,
+                  missing_directory,
+              )
+
+              empty_directory = (
+                  root
+                  / "empty_directory"
+              )
+
+              empty_directory.mkdir()
+
+              expect_raises(
+                  FileNotFoundError,
+                  discover_csv_files,
+                  empty_directory,
+              )
+
+              expect_raises(
+                  ValueError,
+                  validate_trajectory_set,
+                  [],
+              )
+
+              empty_file = (
+                  root
+                  / "empty.csv"
+              )
+
+              empty_file.write_text(
+                  "",
+                  encoding="utf-8",
+              )
+
+              expect_raises(
+                  ValueError,
+                  load_csv,
+                  empty_file,
+              )
+
+              missing_columns = (
+                  root
+                  / "missing_columns.csv"
+              )
+
+              missing_columns.write_text(
+                  "t,sx,sy\n"
+                  "0.0,0.0,0.0\n",
+                  encoding="utf-8",
+              )
+
+              expect_raises(
+                  ValueError,
+                  load_csv,
+                  missing_columns,
+              )
+
+              header_only = (
+                  root
+                  / "header_only.csv"
+              )
+
+              header_only.write_text(
+                  "t,sx,sy,sz\n",
+                  encoding="utf-8",
+              )
+
+              expect_raises(
+                  ValueError,
+                  load_csv,
+                  header_only,
+              )
+
+              invalid_numeric = (
+                  root
+                  / "invalid_numeric.csv"
+              )
+
+              invalid_numeric.write_text(
+                  "t,sx,sy,sz\n"
+                  "0.0,0.0,broken,-1.0\n",
+                  encoding="utf-8",
+              )
+
+              expect_raises(
+                  ValueError,
+                  load_csv,
+                  invalid_numeric,
+              )
+
+              nonfinite = (
+                  root
+                  / "nonfinite.csv"
+              )
+
+              nonfinite.write_text(
+                  "t,sx,sy,sz\n"
+                  "0.0,0.0,nan,-1.0\n",
+                  encoding="utf-8",
+              )
+
+              expect_raises(
+                  ValueError,
+                  load_csv,
+                  nonfinite,
+              )
+
+              repeated_time = (
+                  root
+                  / "repeated_time.csv"
+              )
+
+              repeated_time.write_text(
+                  "t,sx,sy,sz\n"
+                  "0.0,0.0,0.0,-1.0\n"
+                  "0.0,0.1,0.1,-0.9\n",
+                  encoding="utf-8",
+              )
+
+              expect_raises(
+                  ValueError,
+                  load_csv,
+                  repeated_time,
+              )
+
+              decreasing_time = (
+                  root
+                  / "decreasing_time.csv"
+              )
+
+              decreasing_time.write_text(
+                  "t,sx,sy,sz\n"
+                  "1.0,0.0,0.0,-1.0\n"
+                  "0.5,0.1,0.1,-0.9\n",
+                  encoding="utf-8",
+              )
+
+              expect_raises(
+                  ValueError,
+                  load_csv,
+                  decreasing_time,
+              )
+
+              valid_file = (
+                  root
+                  / "valid.csv"
+              )
+
+              valid_file.write_text(
+                  "t,sx,sy,sz\n"
+                  "0.0,0.0,0.0,-1.0\n"
+                  "0.1,0.1,0.2,-0.9\n",
+                  encoding="utf-8",
+              )
+
+              t, sx, sy, sz = load_csv(
+                  valid_file
+              )
+
+              if not (
+                  t.shape
+                  == sx.shape
+                  == sy.shape
+                  == sz.shape
+                  == (
+                      2,
+                  )
+              ):
+                  raise RuntimeError(
+                      "Valid CSV produced "
+                      "unexpected array shapes."
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      np.column_stack(
+                          (
+                              t,
+                              sx,
+                              sy,
+                              sz,
+                          )
+                      )
+                  )
+              ):
+                  raise RuntimeError(
+                      "Valid CSV produced "
+                      "non-finite arrays."
+                  )
+
+          print(
+              "Corrupted CSV rejection "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during edge-case validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report edge-case validation result
+        run: |
+          echo "Resonance edge cases and failure modes validation: PASS"
