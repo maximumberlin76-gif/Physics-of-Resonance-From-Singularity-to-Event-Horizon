@@ -1,76 +1,462 @@
-# rpu_core/twa_demo/run_twa_demo.py
-# Квази-TWA демо: уравнения Блоха со связным драйвом и затуханием.
-# Пишем траектории <σz>(t) для разных γ/Ω, как в картах из PRX-типа работ.
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Plot validated dissipative Bloch trajectories produced by the TWA demo."""
 
-import numpy as np
-from dataclasses import dataclass
-from pathlib import Path
+from __future__ import annotations
+
+import argparse
 import csv
-import time
+import os
+from pathlib import Path
+from typing import Iterable
 
-@dataclass
-class Params:
-    Omega: float      # частота когерентного драйва (рад/с, но единицы относительные)
-    gamma: float      # скорость затухания (1/с, относительные)
-    delta: float      # расстройка (Δ = ω0 - ωdrive)
-    T: float          # конечное время моделирования
-    dt: float         # шаг интегрирования
-    s0: np.ndarray    # начальный вектор спина [sx, sy, sz]
+import matplotlib.pyplot as plt
+import numpy as np
 
-def rk4_step(f, y, t, h, args):
-    k1 = f(t, y, *args)
-    k2 = f(t + 0.5*h, y + 0.5*h*k1, *args)
-    k3 = f(t + 0.5*h, y + 0.5*h*k2, *args)
-    k4 = f(t + h,     y + h*k3,     *args)
-    return y + (h/6.0)*(k1 + 2*k2 + 2*k3 + k4)
 
-def bloch_rhs(t, s, Omega, gamma, delta):
-    sx, sy, sz = s
-    # Уравнения Блоха с продольным затуханием к равновесию sz_eq = -1 (основное состояние)
-    # и поперечным затуханием ~gamma/2 (минимально прилично, без занудства).
-    T1 = 1.0/max(gamma, 1e-12)
-    T2 = 2.0*T1
+REQUIRED_COLUMNS = (
+    "t",
+    "sx",
+    "sy",
+    "sz",
+)
 
-    dsx = -sx/T2 + delta*sy
-    dsy = -sy/T2 - delta*sx + Omega*sz
-    dsz = -(sz + 1.0)/T1 - Omega*sy
-    return np.array([dsx, dsy, dsz])
+DEFAULT_LOGS_DIR = (
+    Path(__file__).resolve().parent
+    / "rpu_core"
+    / "twa_demo"
+    / "logs"
+)
 
-def run(params: Params, out_csv: Path):
-    t = 0.0
-    s = params.s0.astype(float).copy()
-    steps = int(params.T/params.dt)
+DEFAULT_OUTPUT_NAME = "bloch_twa_results.png"
 
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    with out_csv.open("w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["t", "sx", "sy", "sz"])
-        for _ in range(steps+1):
-            w.writerow([t, s[0], s[1], s[2]])
-            s = rk4_step(bloch_rhs, s, t, params.dt,
-                         args=(params.Omega, params.gamma, params.delta))
-            t += params.dt
 
-def main():
-    # Нормируем время в единицах 1/Ω для удобства сравнения
-    Omega = 1.0  # задаём за эталон
-    gammas = [0.1, 0.2, 0.5, 1.0]  # относительные γ/Ω
-    delta = 0.0
-    periods = 20.0    # «Qt» на картинках: до 20 периодов
-    dt = 0.0025       # достаточно мелко для RK4
-    T = periods*(2*np.pi/Omega)
+def load_csv(
+    file_path: Path,
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+]:
+    """Load and validate one Bloch trajectory CSV file."""
 
-    logs_dir = Path(__file__).parent / "logs"
-    stamp = time.strftime("%Y%m%d_%H%M%S")
+    path = Path(
+        file_path
+    ).expanduser().resolve()
 
-    s0 = np.array([0.0, 0.0, -1.0])  # начинаем в основном состоянии
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"CSV file not found: {path}"
+        )
 
-    for g_rel in gammas:
-        params = Params(Omega=Omega, gamma=g_rel*Omega, delta=delta,
-                        T=T, dt=dt, s0=s0)
-        out_csv = logs_dir / f"bloch_Omega{Omega:g}_gammaOverOmega{g_rel}_stamp{stamp}.csv"
-        run(params, out_csv)
-        print(f"[ok] written {out_csv}")
+    rows: list[
+        tuple[
+            float,
+            float,
+            float,
+            float,
+        ]
+    ] = []
+
+    with path.open(
+        "r",
+        encoding="utf-8",
+        newline="",
+    ) as handle:
+        reader = csv.DictReader(
+            handle
+        )
+
+        if reader.fieldnames is None:
+            raise ValueError(
+                f"CSV file has no header: {path}"
+            )
+
+        missing = [
+            column
+            for column in REQUIRED_COLUMNS
+            if column
+            not in reader.fieldnames
+        ]
+
+        if missing:
+            raise ValueError(
+                f"CSV file {path} is missing "
+                f"required columns: "
+                f"{', '.join(missing)}"
+            )
+
+        for line_number, row in enumerate(
+            reader,
+            start=2,
+        ):
+            try:
+                values = tuple(
+                    float(
+                        row[column]
+                    )
+                    for column
+                    in REQUIRED_COLUMNS
+                )
+
+            except (
+                TypeError,
+                ValueError,
+            ) as exc:
+                raise ValueError(
+                    f"Invalid numeric value "
+                    f"in {path} "
+                    f"at line {line_number}"
+                ) from exc
+
+            if not np.all(
+                np.isfinite(
+                    values
+                )
+            ):
+                raise ValueError(
+                    f"Non-finite numeric value "
+                    f"in {path} "
+                    f"at line {line_number}"
+                )
+
+            rows.append(
+                values
+            )
+
+    if not rows:
+        raise ValueError(
+            f"CSV file contains "
+            f"no trajectory rows: {path}"
+        )
+
+    data = np.asarray(
+        rows,
+        dtype=float,
+    )
+
+    t, sx, sy, sz = data.T
+
+    if (
+        t.size > 1
+        and np.any(
+            np.diff(t) <= 0.0
+        )
+    ):
+        raise ValueError(
+            f"Time values must be "
+            f"strictly increasing: {path}"
+        )
+
+    return (
+        t,
+        sx,
+        sy,
+        sz,
+    )
+
+
+def discover_csv_files(
+    logs_dir: Path,
+) -> list[Path]:
+    """Return trajectory CSV files from the demo log directory."""
+
+    directory = Path(
+        logs_dir
+    ).expanduser().resolve()
+
+    if not directory.is_dir():
+        raise FileNotFoundError(
+            f"Logs directory not found: "
+            f"{directory}"
+        )
+
+    files = sorted(
+        path
+        for path in directory.glob(
+            "*.csv"
+        )
+        if path.is_file()
+    )
+
+    if not files:
+        raise FileNotFoundError(
+            f"No CSV trajectory files "
+            f"found in: {directory}. "
+            f"Run "
+            f"rpu_core/twa_demo/"
+            f"run_twa_demo.py first."
+        )
+
+    return files
+
+
+def plot_results(
+    files: Iterable[Path],
+    output_path: Path | None = None,
+    show: bool = True,
+) -> Path:
+    """
+    Validate trajectories,
+    plot <sigma_z>(t),
+    and save a PNG artifact.
+    """
+
+    file_list = [
+        Path(
+            file_path
+        )
+        for file_path in files
+    ]
+
+    if not file_list:
+        raise ValueError(
+            "At least one CSV file "
+            "is required"
+        )
+
+    output = (
+        Path(
+            output_path
+        )
+        .expanduser()
+        .resolve()
+        if output_path is not None
+        else (
+            file_list[0]
+            .resolve()
+            .parent
+            / DEFAULT_OUTPUT_NAME
+        )
+    )
+
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    figure, axis = plt.subplots(
+        figsize=(
+            10,
+            6,
+        )
+    )
+
+    try:
+        for file_path in file_list:
+            (
+                t,
+                _,
+                _,
+                sz,
+            ) = load_csv(
+                file_path
+            )
+
+            axis.plot(
+                t,
+                sz,
+                label=file_path.stem,
+            )
+
+        axis.set_xlabel(
+            "Ωt"
+        )
+
+        axis.set_ylabel(
+            "⟨σz⟩"
+        )
+
+        axis.set_title(
+            "Bloch Dynamics — "
+            "TWA Simulation"
+        )
+
+        axis.legend()
+
+        axis.grid(
+            True
+        )
+
+        figure.tight_layout()
+
+        figure.savefig(
+            output,
+            dpi=160,
+            bbox_inches="tight",
+        )
+
+        if show:
+            plt.show()
+
+    finally:
+        plt.close(
+            figure
+        )
+
+    return output
+
+
+def default_show_mode() -> bool:
+    """
+    Show interactively when
+    a graphical session is available.
+    """
+
+    if os.environ.get(
+        "CI"
+    ):
+        return False
+
+    backend = (
+        plt.get_backend()
+        .lower()
+    )
+
+    non_interactive_backends = (
+        "agg",
+        "pdf",
+        "ps",
+        "svg",
+        "template",
+    )
+
+    if any(
+        name in backend
+        for name
+        in non_interactive_backends
+    ):
+        return False
+
+    if (
+        os.name == "nt"
+        or "macosx" in backend
+    ):
+        return True
+
+    return bool(
+        os.environ.get(
+            "DISPLAY"
+        )
+        or os.environ.get(
+            "WAYLAND_DISPLAY"
+        )
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate and plot dissipative "
+            "Bloch trajectories generated by "
+            "rpu_core/twa_demo/"
+            "run_twa_demo.py"
+        )
+    )
+
+    parser.add_argument(
+        "--logs-dir",
+        type=Path,
+        default=DEFAULT_LOGS_DIR,
+        help=(
+            "Directory containing "
+            "trajectory CSV files"
+        ),
+    )
+
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help=(
+            "PNG output path. "
+            "Default: "
+            "<logs-dir>/"
+            "bloch_twa_results.png"
+        ),
+    )
+
+    show_group = (
+        parser
+        .add_mutually_exclusive_group()
+    )
+
+    show_group.add_argument(
+        "--show",
+        action="store_true",
+        help=(
+            "Force interactive display "
+            "after saving the PNG"
+        ),
+    )
+
+    show_group.add_argument(
+        "--no-show",
+        action="store_true",
+        help=(
+            "Disable interactive display "
+            "for CI or headless execution"
+        ),
+    )
+
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+
+    logs_dir = (
+        args.logs_dir
+        .expanduser()
+        .resolve()
+    )
+
+    files = discover_csv_files(
+        logs_dir
+    )
+
+    output = (
+        args.output
+        .expanduser()
+        .resolve()
+        if args.output is not None
+        else (
+            logs_dir
+            / DEFAULT_OUTPUT_NAME
+        )
+    )
+
+    if args.show:
+        show = True
+
+    elif args.no_show:
+        show = False
+
+    else:
+        show = default_show_mode()
+
+    saved_path = plot_results(
+        files=files,
+        output_path=output,
+        show=show,
+    )
+
+    print(
+        f"[ok] validated "
+        f"{len(files)} "
+        f"CSV trajectory files"
+    )
+
+    print(
+        f"[ok] saved "
+        f"{saved_path}"
+    )
+
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(
+        main()
+    )
