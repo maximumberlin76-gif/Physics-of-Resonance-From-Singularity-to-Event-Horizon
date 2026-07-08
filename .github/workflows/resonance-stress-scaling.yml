@@ -1,0 +1,969 @@
+name: Resonance Stress and Scaling
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-stress-scaling.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-stress-scaling.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  stress-scaling:
+    name: Validate stress endurance and scaling
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install stress-test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+          python -m pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q \
+            rpu_core \
+            plot_twa_results.py
+
+      - name: Validate RPU node-count scaling
+        run: |
+          python - <<'PY'
+          import resource
+          import time
+
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          sizes = (
+              32,
+              64,
+              128,
+              256,
+          )
+
+          steps = 160
+          dt = 0.005
+          results = []
+
+          for num_nodes in sizes:
+              x = np.linspace(
+                  0.0,
+                  2.0 * np.pi,
+                  num_nodes,
+                  endpoint=False,
+              )
+
+              frequency_profile = (
+                  2.0
+                  * np.pi
+                  * (
+                      1.0
+                      + 0.15
+                      * np.sin(
+                          3.0 * x
+                      )
+                      + 0.05
+                      * np.sin(
+                          11.0 * x
+                      )
+                  )
+              )
+
+              amplitude_profile = (
+                  0.15
+                  + 0.35
+                  * (
+                      0.5
+                      + 0.5
+                      * np.cos(
+                          5.0 * x
+                      )
+                  )
+              )
+
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=dt,
+                  sigma=0.01,
+                  k_global=0.6,
+                  ternary=True,
+                  anti_R=0.98,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              start = time.perf_counter()
+
+              core.step(
+                  steps,
+                  stability_guard=False,
+              )
+
+              elapsed = (
+                  time.perf_counter()
+                  - start
+              )
+
+              order = core.measure(
+                  "order"
+              )
+
+              if core.W.shape != (
+                  num_nodes,
+                  num_nodes,
+              ):
+                  raise RuntimeError(
+                      "RPU coupling-matrix shape "
+                      "mismatch."
+                  )
+
+              if core.Wq.shape != (
+                  num_nodes,
+                  num_nodes,
+              ):
+                  raise RuntimeError(
+                      "RPU ternary coupling-matrix "
+                      "shape mismatch."
+                  )
+
+              if core.theta.shape != (
+                  num_nodes,
+              ):
+                  raise RuntimeError(
+                      "RPU phase-vector shape "
+                      "mismatch."
+                  )
+
+              if core.s.shape != (
+                  num_nodes,
+              ):
+                  raise RuntimeError(
+                      "RPU ternary-state shape "
+                      "mismatch."
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      core.theta
+                  )
+              ):
+                  raise RuntimeError(
+                      "Non-finite RPU phases "
+                      "detected during scaling."
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      core.ext_phase
+                  )
+              ):
+                  raise RuntimeError(
+                      "Non-finite external phases "
+                      "detected during scaling."
+                  )
+
+              if not (
+                  0.0
+                  <= order["R"]
+                  <= 1.0 + 1.0e-12
+              ):
+                  raise RuntimeError(
+                      "RPU order parameter left "
+                      "the valid numerical range."
+                  )
+
+              expected_time = (
+                  steps * dt
+              )
+
+              if abs(
+                  core.t
+                  - expected_time
+              ) > 1.0e-10:
+                  raise RuntimeError(
+                      "RPU scaling run ended at "
+                      "an unexpected integration "
+                      "time."
+                  )
+
+              peak_rss_mib = (
+                  resource.getrusage(
+                      resource.RUSAGE_SELF
+                  ).ru_maxrss
+                  / 1024.0
+              )
+
+              results.append(
+                  (
+                      num_nodes,
+                      elapsed,
+                      peak_rss_mib,
+                      order["R"],
+                  )
+              )
+
+          total_elapsed = sum(
+              result[1]
+              for result in results
+          )
+
+          maximum_rss = max(
+              result[2]
+              for result in results
+          )
+
+          if total_elapsed > 120.0:
+              raise RuntimeError(
+                  "RPU scaling workload exceeded "
+                  "the runtime safety limit: "
+                  f"{total_elapsed:.3f} s"
+              )
+
+          if maximum_rss > 2048.0:
+              raise RuntimeError(
+                  "RPU scaling workload exceeded "
+                  "the memory safety limit: "
+                  f"{maximum_rss:.3f} MiB"
+              )
+
+          for (
+              num_nodes,
+              elapsed,
+              peak_rss_mib,
+              coherence,
+          ) in results:
+              print(
+                  f"N={num_nodes}, "
+                  f"elapsed={elapsed:.6f} s, "
+                  f"peak_rss={peak_rss_mib:.3f} MiB, "
+                  f"R={coherence:.6f}"
+              )
+
+          print(
+              "RPU node-count scaling "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate long-duration RPU endurance
+        run: |
+          python - <<'PY'
+          import resource
+          import time
+
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          num_nodes = 96
+          dt = 0.003
+          chunk_steps = 100
+          chunks = 50
+
+          x = np.linspace(
+              0.0,
+              2.0 * np.pi,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              2.0
+              * np.pi
+              * (
+                  1.0
+                  + 0.20
+                  * np.sin(
+                      2.0 * x
+                  )
+                  + 0.08
+                  * np.sin(
+                      7.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.25
+              + 0.35
+              * (
+                  0.5
+                  + 0.5
+                  * np.sin(
+                      5.0 * x
+                      + 0.3
+                  )
+              )
+          )
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              dt=dt,
+              sigma=0.015,
+              k_global=0.55,
+              ternary=True,
+              anti_R=0.97,
+              anti_duration=120,
+          )
+
+          core.lock(
+              freq_profile=(
+                  frequency_profile
+              ),
+              amp_profile=(
+                  amplitude_profile
+              ),
+              reset_phase=True,
+          )
+
+          start = time.perf_counter()
+
+          for chunk_index in range(
+              chunks
+          ):
+              core.step(
+                  chunk_steps,
+                  stability_guard=False,
+              )
+
+              if not np.all(
+                  np.isfinite(
+                      core.theta
+                  )
+              ):
+                  raise RuntimeError(
+                      "Non-finite RPU phases "
+                      "detected during endurance "
+                      f"chunk {chunk_index}."
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      core.ext_phase
+                  )
+              ):
+                  raise RuntimeError(
+                      "Non-finite external phases "
+                      "detected during endurance "
+                      f"chunk {chunk_index}."
+                  )
+
+              if not np.all(
+                  np.isin(
+                      core.s,
+                      (
+                          -1,
+                          0,
+                          1,
+                      ),
+                  )
+              ):
+                  raise RuntimeError(
+                      "Invalid ternary state "
+                      "detected during endurance "
+                      f"chunk {chunk_index}."
+                  )
+
+              order = core.measure(
+                  "order"
+              )
+
+              if not (
+                  0.0
+                  <= order["R"]
+                  <= 1.0 + 1.0e-12
+              ):
+                  raise RuntimeError(
+                      "RPU order parameter left "
+                      "the valid numerical range "
+                      "during endurance."
+                  )
+
+              if not np.isfinite(
+                  order["phi"]
+              ):
+                  raise RuntimeError(
+                      "Non-finite mean phase "
+                      "detected during endurance."
+                  )
+
+          elapsed = (
+              time.perf_counter()
+              - start
+          )
+
+          expected_time = (
+              chunks
+              * chunk_steps
+              * dt
+          )
+
+          if abs(
+              core.t
+              - expected_time
+          ) > 1.0e-9:
+              raise RuntimeError(
+                  "Long-duration RPU run ended "
+                  "at an unexpected integration "
+                  "time."
+              )
+
+          peak_rss_mib = (
+              resource.getrusage(
+                  resource.RUSAGE_SELF
+              ).ru_maxrss
+              / 1024.0
+          )
+
+          if elapsed > 120.0:
+              raise RuntimeError(
+                  "Long-duration RPU workload "
+                  "exceeded the runtime safety "
+                  "limit: "
+                  f"{elapsed:.3f} s"
+              )
+
+          if peak_rss_mib > 2048.0:
+              raise RuntimeError(
+                  "Long-duration RPU workload "
+                  "exceeded the memory safety "
+                  "limit: "
+                  f"{peak_rss_mib:.3f} MiB"
+              )
+
+          final_order = core.measure(
+              "order"
+          )
+
+          print(
+              f"steps={chunks * chunk_steps}, "
+              f"elapsed={elapsed:.6f} s, "
+              f"peak_rss={peak_rss_mib:.3f} MiB, "
+              f"R={final_order['R']:.6f}"
+          )
+
+          print(
+              "Long-duration RPU endurance "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate diverse RPU stress profiles
+        run: |
+          python - <<'PY'
+          import time
+
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          num_nodes = 128
+
+          x = np.linspace(
+              0.0,
+              2.0 * np.pi,
+              num_nodes,
+              endpoint=False,
+          )
+
+          profiles = (
+              (
+                  "uniform",
+                  np.full(
+                      num_nodes,
+                      2.0 * np.pi,
+                  ),
+                  np.full(
+                      num_nodes,
+                      0.25,
+                  ),
+              ),
+              (
+                  "detuned",
+                  2.0
+                  * np.pi
+                  * np.linspace(
+                      0.6,
+                      1.4,
+                      num_nodes,
+                  ),
+                  np.linspace(
+                      0.05,
+                      0.75,
+                      num_nodes,
+                  ),
+              ),
+              (
+                  "asymmetric",
+                  2.0
+                  * np.pi
+                  * (
+                      1.0
+                      + 0.28
+                      * np.sin(
+                          3.0 * x
+                      )
+                      + 0.11
+                      * np.cos(
+                          8.0 * x
+                          + 0.4
+                      )
+                  ),
+                  0.10
+                  + 0.90
+                  * (
+                      0.5
+                      + 0.5
+                      * np.sin(
+                          5.0 * x
+                          + 0.7
+                      )
+                  ),
+              ),
+          )
+
+          results = []
+
+          for index, (
+              profile_name,
+              frequency_profile,
+              amplitude_profile,
+          ) in enumerate(
+              profiles
+          ):
+              core = RPUCore(
+                  num_nodes,
+                  seed=76 + index,
+                  dt=0.004,
+                  sigma=0.02,
+                  k_global=0.7,
+                  ternary=True,
+                  anti_R=0.96,
+                  anti_duration=100,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              start = time.perf_counter()
+
+              core.step(
+                  1200,
+                  stability_guard=True,
+              )
+
+              elapsed = (
+                  time.perf_counter()
+                  - start
+              )
+
+              order = core.measure(
+                  "order"
+              )
+
+              if not np.all(
+                  np.isfinite(
+                      core.theta
+                  )
+              ):
+                  raise RuntimeError(
+                      "Non-finite RPU phases in "
+                      f"profile {profile_name}."
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      core.ext_phase
+                  )
+              ):
+                  raise RuntimeError(
+                      "Non-finite external phases "
+                      f"in profile {profile_name}."
+                  )
+
+              if not np.all(
+                  np.isin(
+                      core.s,
+                      (
+                          -1,
+                          0,
+                          1,
+                      ),
+                  )
+              ):
+                  raise RuntimeError(
+                      "Invalid ternary state in "
+                      f"profile {profile_name}."
+                  )
+
+              if not (
+                  0.0
+                  <= order["R"]
+                  <= 1.0 + 1.0e-12
+              ):
+                  raise RuntimeError(
+                      "Invalid order parameter in "
+                      f"profile {profile_name}."
+                  )
+
+              if elapsed > 120.0:
+                  raise RuntimeError(
+                      "RPU stress profile exceeded "
+                      "the runtime safety limit: "
+                      f"{profile_name}, "
+                      f"{elapsed:.3f} s"
+                  )
+
+              results.append(
+                  (
+                      profile_name,
+                      elapsed,
+                      order["R"],
+                      core.dt,
+                  )
+              )
+
+          for (
+              profile_name,
+              elapsed,
+              coherence,
+              final_dt,
+          ) in results:
+              print(
+                  f"profile={profile_name}, "
+                  f"elapsed={elapsed:.6f} s, "
+                  f"R={coherence:.6f}, "
+                  f"final_dt={final_dt:.6e}"
+              )
+
+          print(
+              "Diverse RPU stress-profile "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate Bloch batch stress and scaling
+        run: |
+          python - <<'PY'
+          import csv
+          import resource
+          import tempfile
+          import time
+          from pathlib import Path
+
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              generate_trajectories,
+          )
+
+
+          gamma_ratios = (
+              0.05,
+              0.10,
+              0.20,
+              0.35,
+              0.50,
+              0.80,
+              1.20,
+              2.00,
+          )
+
+          initial_state = np.array(
+              [
+                  0.15,
+                  -0.05,
+                  -0.95,
+              ],
+              dtype=float,
+          )
+
+          required_columns = (
+              "t",
+              "sx",
+              "sy",
+              "sz",
+          )
+
+          with tempfile.TemporaryDirectory() as tmp:
+              output_directory = Path(
+                  tmp
+              )
+
+              start = time.perf_counter()
+
+              results = generate_trajectories(
+                  Omega=1.0,
+                  gamma_ratios=gamma_ratios,
+                  delta=0.25,
+                  periods=24.0,
+                  dt=0.005,
+                  s0=initial_state,
+                  output_dir=output_directory,
+                  stamp="stress",
+              )
+
+              elapsed = (
+                  time.perf_counter()
+                  - start
+              )
+
+              files = sorted(
+                  output_directory.glob(
+                      "*.csv"
+                  )
+              )
+
+              if len(results) != len(
+                  gamma_ratios
+              ):
+                  raise RuntimeError(
+                      "Bloch stress generation "
+                      "returned an unexpected "
+                      "result count."
+                  )
+
+              if len(files) != len(
+                  gamma_ratios
+              ):
+                  raise RuntimeError(
+                      "Bloch stress generation "
+                      "created an unexpected "
+                      "CSV file count."
+                  )
+
+              total_rows = 0
+
+              for result in results:
+                  output = Path(
+                      result["output"]
+                  )
+
+                  if not output.is_file():
+                      raise RuntimeError(
+                          "Bloch stress result "
+                          "references a missing "
+                          "CSV file."
+                      )
+
+                  final_state = np.asarray(
+                      result["final_state"],
+                      dtype=float,
+                  )
+
+                  stationary_state = np.asarray(
+                      result[
+                          "stationary_state"
+                      ],
+                      dtype=float,
+                  )
+
+                  stationary_error = float(
+                      result[
+                          "stationary_error_l2"
+                      ]
+                  )
+
+                  if not np.all(
+                      np.isfinite(
+                          final_state
+                      )
+                  ):
+                      raise RuntimeError(
+                          "Non-finite final Bloch "
+                          "state detected."
+                      )
+
+                  if not np.all(
+                      np.isfinite(
+                          stationary_state
+                      )
+                  ):
+                      raise RuntimeError(
+                          "Non-finite analytical "
+                          "Bloch state detected."
+                      )
+
+                  if (
+                      not np.isfinite(
+                          stationary_error
+                      )
+                      or stationary_error < 0.0
+                  ):
+                      raise RuntimeError(
+                          "Invalid Bloch stationary "
+                          "error detected."
+                      )
+
+              for file_path in files:
+                  with file_path.open(
+                      "r",
+                      encoding="utf-8",
+                      newline="",
+                  ) as handle:
+                      reader = csv.DictReader(
+                          handle
+                      )
+
+                      if tuple(
+                          reader.fieldnames
+                          or ()
+                      ) != required_columns:
+                          raise RuntimeError(
+                              "Unexpected Bloch CSV "
+                              f"header in {file_path}."
+                          )
+
+                      rows = [
+                          [
+                              float(
+                                  row[column]
+                              )
+                              for column
+                              in required_columns
+                          ]
+                          for row in reader
+                      ]
+
+                  data = np.asarray(
+                      rows,
+                      dtype=float,
+                  )
+
+                  if (
+                      data.ndim != 2
+                      or data.shape[1] != 4
+                      or data.shape[0] < 1000
+                  ):
+                      raise RuntimeError(
+                          "Invalid stress trajectory "
+                          f"shape in {file_path}: "
+                          f"{data.shape}"
+                      )
+
+                  if not np.all(
+                      np.isfinite(
+                          data
+                      )
+                  ):
+                      raise RuntimeError(
+                          "Non-finite values detected "
+                          f"in {file_path}."
+                      )
+
+                  if not np.all(
+                      np.diff(
+                          data[:, 0]
+                      )
+                      > 0.0
+                  ):
+                      raise RuntimeError(
+                          "Time is not strictly "
+                          f"increasing in {file_path}."
+                      )
+
+                  total_rows += int(
+                      data.shape[0]
+                  )
+
+              if total_rows < 200000:
+                  raise RuntimeError(
+                      "Bloch stress workload did not "
+                      "produce the required trajectory "
+                      "volume: "
+                      f"{total_rows} rows"
+                  )
+
+              peak_rss_mib = (
+                  resource.getrusage(
+                      resource.RUSAGE_SELF
+                  ).ru_maxrss
+                  / 1024.0
+              )
+
+              if elapsed > 180.0:
+                  raise RuntimeError(
+                      "Bloch stress workload exceeded "
+                      "the runtime safety limit: "
+                      f"{elapsed:.3f} s"
+                  )
+
+              if peak_rss_mib > 2048.0:
+                  raise RuntimeError(
+                      "Bloch stress workload exceeded "
+                      "the memory safety limit: "
+                      f"{peak_rss_mib:.3f} MiB"
+                  )
+
+              print(
+                  f"trajectories={len(files)}, "
+                  f"rows={total_rows}, "
+                  f"elapsed={elapsed:.6f} s, "
+                  f"peak_rss={peak_rss_mib:.3f} MiB"
+              )
+
+          print(
+              "Bloch batch stress and scaling "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during stress validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report stress and scaling result
+        run: |
+          echo "Resonance stress and scaling validation: PASS"
