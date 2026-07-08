@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Validate and plot dissipative Bloch trajectories produced by the TWA demo."""
+"""Validate and plot dissipative Bloch trajectories produced by the quasi-TWA demo."""
 
 from __future__ import annotations
 
@@ -39,102 +39,220 @@ def load_csv(
     np.ndarray,
     np.ndarray,
 ]:
-    """Load and validate one Bloch trajectory CSV file."""
+    """Load and validate one dissipative Bloch trajectory CSV file."""
 
-    path = Path(file_path).expanduser().resolve()
+    path = Path(
+        file_path
+    ).expanduser().resolve()
 
     if not path.is_file():
         raise FileNotFoundError(
             f"CSV file not found: {path}"
         )
 
-    rows: list[tuple[float, float, float, float]] = []
+    rows: list[
+        tuple[
+            float,
+            float,
+            float,
+            float,
+        ]
+    ] = []
 
     with path.open(
         "r",
         encoding="utf-8",
         newline="",
     ) as handle:
-        reader = csv.DictReader(handle)
+        reader = csv.DictReader(
+            handle
+        )
 
         if reader.fieldnames is None:
             raise ValueError(
                 f"CSV file has no header: {path}"
             )
 
+        normalized_fieldnames = tuple(
+            field.strip()
+            for field in reader.fieldnames
+            if field is not None
+        )
+
         missing = [
             column
             for column in REQUIRED_COLUMNS
-            if column not in reader.fieldnames
+            if column
+            not in normalized_fieldnames
         ]
 
         if missing:
             raise ValueError(
-                f"CSV file {path} is missing required columns: "
+                f"CSV file {path} is missing "
+                f"required columns: "
                 f"{', '.join(missing)}"
             )
 
-        for line_number, row in enumerate(reader, start=2):
+        for line_number, row in enumerate(
+            reader,
+            start=2,
+        ):
             try:
                 values = tuple(
-                    float(row[column])
-                    for column in REQUIRED_COLUMNS
+                    float(
+                        row[column]
+                    )
+                    for column
+                    in REQUIRED_COLUMNS
                 )
-            except (TypeError, ValueError) as exc:
+
+            except (
+                KeyError,
+                TypeError,
+                ValueError,
+            ) as exc:
                 raise ValueError(
-                    f"Invalid numeric value in {path} "
+                    f"Invalid trajectory row "
+                    f"in {path} "
                     f"at line {line_number}"
                 ) from exc
 
-            if not np.all(np.isfinite(values)):
+            if not np.all(
+                np.isfinite(
+                    values
+                )
+            ):
                 raise ValueError(
-                    f"Non-finite numeric value in {path} "
+                    f"Non-finite numeric value "
+                    f"in {path} "
                     f"at line {line_number}"
                 )
 
-            rows.append(values)
+            rows.append(
+                values
+            )
 
     if not rows:
         raise ValueError(
-            f"CSV file contains no trajectory rows: {path}"
+            f"CSV file contains "
+            f"no trajectory rows: {path}"
         )
 
-    data = np.asarray(rows, dtype=float)
+    data = np.asarray(
+        rows,
+        dtype=float,
+    )
+
     t, sx, sy, sz = data.T
 
-    if t.size > 1 and np.any(np.diff(t) <= 0.0):
+    if (
+        t.size > 1
+        and np.any(
+            np.diff(
+                t
+            ) <= 0.0
+        )
+    ):
         raise ValueError(
-            f"Time values must be strictly increasing: {path}"
+            f"Time values must be "
+            f"strictly increasing: {path}"
         )
 
-    return t, sx, sy, sz
+    return (
+        t,
+        sx,
+        sy,
+        sz,
+    )
 
 
 def discover_csv_files(
     logs_dir: Path,
 ) -> list[Path]:
-    """Return trajectory CSV files from the demo log directory."""
+    """Return sorted Bloch trajectory CSV files from the selected log directory."""
 
-    directory = Path(logs_dir).expanduser().resolve()
+    directory = Path(
+        logs_dir
+    ).expanduser().resolve()
 
     if not directory.is_dir():
         raise FileNotFoundError(
-            f"Logs directory not found: {directory}"
+            f"Logs directory not found: "
+            f"{directory}"
         )
 
     files = sorted(
         path
-        for path in directory.glob("*.csv")
+        for path in directory.glob(
+            "*.csv"
+        )
         if path.is_file()
     )
 
     if not files:
         raise FileNotFoundError(
-            f"No CSV trajectory files found in: {directory}. "
-            "Run rpu_core/twa_demo/run_twa_demo.py first."
+            f"No CSV trajectory files "
+            f"found in: {directory}. "
+            f"Run "
+            f"rpu_core/twa_demo/"
+            f"run_twa_demo.py first."
         )
 
     return files
+
+
+def validate_trajectory_set(
+    files: Iterable[Path],
+) -> list[
+    tuple[
+        Path,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+    ]
+]:
+    """Load and validate all selected trajectories before plotting."""
+
+    file_list = [
+        Path(
+            file_path
+        )
+        for file_path in files
+    ]
+
+    if not file_list:
+        raise ValueError(
+            "At least one CSV file "
+            "is required"
+        )
+
+    trajectories: list[
+        tuple[
+            Path,
+            np.ndarray,
+            np.ndarray,
+            np.ndarray,
+            np.ndarray,
+        ]
+    ] = []
+
+    for file_path in file_list:
+        t, sx, sy, sz = load_csv(
+            file_path
+        )
+
+        trajectories.append(
+            (
+                file_path.resolve(),
+                t,
+                sx,
+                sy,
+                sz,
+            )
+        )
+
+    return trajectories
 
 
 def plot_results(
@@ -144,17 +262,25 @@ def plot_results(
 ) -> Path:
     """Validate trajectories, plot <sigma_z>(t), and save a PNG artifact."""
 
-    file_list = [Path(file_path) for file_path in files]
+    trajectories = validate_trajectory_set(
+        files
+    )
 
-    if not file_list:
-        raise ValueError(
-            "At least one CSV file is required"
-        )
+    default_parent = trajectories[
+        0
+    ][0].parent
 
     output = (
-        Path(output_path).expanduser().resolve()
+        Path(
+            output_path
+        )
+        .expanduser()
+        .resolve()
         if output_path is not None
-        else file_list[0].resolve().parent / DEFAULT_OUTPUT_NAME
+        else (
+            default_parent
+            / DEFAULT_OUTPUT_NAME
+        )
     )
 
     output.parent.mkdir(
@@ -163,24 +289,44 @@ def plot_results(
     )
 
     figure, axis = plt.subplots(
-        figsize=(10, 6)
+        figsize=(
+            10,
+            6,
+        )
     )
 
     try:
-        for file_path in file_list:
-            t, _, _, sz = load_csv(file_path)
-
+        for (
+            file_path,
+            t,
+            _,
+            _,
+            sz,
+        ) in trajectories:
             axis.plot(
                 t,
                 sz,
                 label=file_path.stem,
             )
 
-        axis.set_xlabel("Ωt")
-        axis.set_ylabel("⟨σz⟩")
-        axis.set_title("Bloch Dynamics — TWA Simulation")
+        axis.set_xlabel(
+            "Ωt"
+        )
+
+        axis.set_ylabel(
+            "⟨σz⟩"
+        )
+
+        axis.set_title(
+            "Dissipative Bloch Dynamics — quasi-TWA Demo"
+        )
+
         axis.legend()
-        axis.grid(True)
+
+        axis.grid(
+            True
+        )
+
         figure.tight_layout()
 
         figure.savefig(
@@ -193,7 +339,19 @@ def plot_results(
             plt.show()
 
     finally:
-        plt.close(figure)
+        plt.close(
+            figure
+        )
+
+    if not output.is_file():
+        raise RuntimeError(
+            f"Plot artifact was not created: {output}"
+        )
+
+    if output.stat().st_size <= 0:
+        raise RuntimeError(
+            f"Plot artifact is empty: {output}"
+        )
 
     return output
 
@@ -201,10 +359,15 @@ def plot_results(
 def default_show_mode() -> bool:
     """Return True when an interactive graphical session is available."""
 
-    if os.environ.get("CI"):
+    if os.environ.get(
+        "CI"
+    ):
         return False
 
-    backend = plt.get_backend().lower()
+    backend = (
+        plt.get_backend()
+        .lower()
+    )
 
     non_interactive_backends = (
         "agg",
@@ -216,24 +379,34 @@ def default_show_mode() -> bool:
 
     if any(
         name in backend
-        for name in non_interactive_backends
+        for name
+        in non_interactive_backends
     ):
         return False
 
-    if os.name == "nt" or "macosx" in backend:
+    if (
+        os.name == "nt"
+        or "macosx" in backend
+    ):
         return True
 
     return bool(
-        os.environ.get("DISPLAY")
-        or os.environ.get("WAYLAND_DISPLAY")
+        os.environ.get(
+            "DISPLAY"
+        )
+        or os.environ.get(
+            "WAYLAND_DISPLAY"
+        )
     )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Validate and plot dissipative Bloch trajectories generated by "
-            "rpu_core/twa_demo/run_twa_demo.py"
+            "Validate and plot dissipative "
+            "Bloch trajectories generated by "
+            "rpu_core/twa_demo/"
+            "run_twa_demo.py"
         )
     )
 
@@ -241,7 +414,10 @@ def parse_args() -> argparse.Namespace:
         "--logs-dir",
         type=Path,
         default=DEFAULT_LOGS_DIR,
-        help="Directory containing trajectory CSV files",
+        help=(
+            "Directory containing "
+            "trajectory CSV files"
+        ),
     )
 
     parser.add_argument(
@@ -249,23 +425,34 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "PNG output path. Default: "
-            "<logs-dir>/bloch_twa_results.png"
+            "PNG output path. "
+            "Default: "
+            "<logs-dir>/"
+            "bloch_twa_results.png"
         ),
     )
 
-    show_group = parser.add_mutually_exclusive_group()
+    show_group = (
+        parser
+        .add_mutually_exclusive_group()
+    )
 
     show_group.add_argument(
         "--show",
         action="store_true",
-        help="Force interactive display after saving the PNG",
+        help=(
+            "Force interactive display "
+            "after saving the PNG"
+        ),
     )
 
     show_group.add_argument(
         "--no-show",
         action="store_true",
-        help="Disable interactive display for CI or headless execution",
+        help=(
+            "Disable interactive display "
+            "for CI or headless execution"
+        ),
     )
 
     return parser.parse_args()
@@ -274,19 +461,33 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
 
-    logs_dir = args.logs_dir.expanduser().resolve()
-    files = discover_csv_files(logs_dir)
+    logs_dir = (
+        args.logs_dir
+        .expanduser()
+        .resolve()
+    )
+
+    files = discover_csv_files(
+        logs_dir
+    )
 
     output = (
-        args.output.expanduser().resolve()
+        args.output
+        .expanduser()
+        .resolve()
         if args.output is not None
-        else logs_dir / DEFAULT_OUTPUT_NAME
+        else (
+            logs_dir
+            / DEFAULT_OUTPUT_NAME
+        )
     )
 
     if args.show:
         show = True
+
     elif args.no_show:
         show = False
+
     else:
         show = default_show_mode()
 
@@ -297,15 +498,20 @@ def main() -> int:
     )
 
     print(
-        f"[ok] validated {len(files)} CSV trajectory files"
+        f"[ok] validated "
+        f"{len(files)} "
+        f"CSV trajectory files"
     )
 
     print(
-        f"[ok] saved {saved_path}"
+        f"[ok] saved "
+        f"{saved_path}"
     )
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        main()
+    )
