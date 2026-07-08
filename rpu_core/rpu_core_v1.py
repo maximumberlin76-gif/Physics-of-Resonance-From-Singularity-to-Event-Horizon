@@ -1218,24 +1218,32 @@ def run_once(
         f"{ternary['s'][:24].tolist()}"
     )
 
+    log_R_text = np.array2string(
+        np.array(
+            log_R
+        ),
+        precision=3,
+        separator=", ",
+    )
+
+    log_phi_text = np.array2string(
+        np.array(
+            log_phi
+        ),
+        precision=3,
+        separator=", ",
+    )
+
     print(
         f"[diag] R(t) "
         f"samples={len(log_R)} → "
-        f"{np.array2string(
-            np.array(log_R),
-            precision=3,
-            separator=', ',
-        )}"
+        f"{log_R_text}"
     )
 
     print(
         f"[diag] φ(t) "
         f"samples={len(log_phi)} → "
-        f"{np.array2string(
-            np.array(log_phi),
-            precision=3,
-            separator=', ',
-        )}"
+        f"{log_phi_text}"
     )
 
 
@@ -1391,13 +1399,15 @@ def run_scan(
         f"α≈ {candidates}"
     )
 
+    R_values_text = np.array2string(
+        R_values,
+        precision=3,
+        separator=", ",
+    )
+
     print(
         f"[scan] R(α) = "
-        f"{np.array2string(
-            R_values,
-            precision=3,
-            separator=', ',
-        )}"
+        f"{R_values_text}"
     )
 
     print(
