@@ -99,39 +99,92 @@ class RPUCore:
         state_tau=0.33,
     ):
         self.N = int(N)
+
         if self.N <= 0:
-            raise ValueError("N must be positive")
+            raise ValueError(
+                "N must be positive"
+            )
 
         self.dt = float(dt)
-        if not np.isfinite(self.dt) or self.dt <= 0.0:
-            raise ValueError("dt must be a finite positive value")
 
-        self.kg = float(k_global)
-        self.sigma_base = float(sigma)
-        self.gamma = float(gamma)
-        self.wq_thresh = float(wq_thresh)
-        self.state_tau = float(state_tau)
-
-        if not np.isfinite(self.kg):
-            raise ValueError("k_global must be finite")
-
-        if not np.isfinite(self.sigma_base) or self.sigma_base < 0.0:
-            raise ValueError("sigma must be a finite non-negative value")
-
-        if not np.isfinite(self.gamma):
-            raise ValueError("gamma must be finite")
-
-        if not np.isfinite(self.wq_thresh) or self.wq_thresh < 0.0:
+        if (
+            not np.isfinite(self.dt)
+            or self.dt <= 0.0
+        ):
             raise ValueError(
-                "wq_thresh must be a finite non-negative value"
+                "dt must be a finite positive value"
             )
 
-        if not np.isfinite(self.state_tau) or self.state_tau < 0.0:
+        self.kg = float(
+            k_global
+        )
+
+        self.sigma_base = float(
+            sigma
+        )
+
+        self.gamma = float(
+            gamma
+        )
+
+        self.wq_thresh = float(
+            wq_thresh
+        )
+
+        self.state_tau = float(
+            state_tau
+        )
+
+        if not np.isfinite(
+            self.kg
+        ):
             raise ValueError(
-                "state_tau must be a finite non-negative value"
+                "k_global must be finite"
             )
 
-        self.rng = np.random.default_rng(seed)
+        if (
+            not np.isfinite(
+                self.sigma_base
+            )
+            or self.sigma_base < 0.0
+        ):
+            raise ValueError(
+                "sigma must be a finite "
+                "non-negative value"
+            )
+
+        if not np.isfinite(
+            self.gamma
+        ):
+            raise ValueError(
+                "gamma must be finite"
+            )
+
+        if (
+            not np.isfinite(
+                self.wq_thresh
+            )
+            or self.wq_thresh < 0.0
+        ):
+            raise ValueError(
+                "wq_thresh must be a finite "
+                "non-negative value"
+            )
+
+        if (
+            not np.isfinite(
+                self.state_tau
+            )
+            or self.state_tau < 0.0
+        ):
+            raise ValueError(
+                "state_tau must be a finite "
+                "non-negative value"
+            )
+
+        self.rng = np.random.default_rng(
+            seed
+        )
 
         self.omega = self.rng.normal(
             TAU * 1.0,
@@ -148,50 +201,91 @@ class RPUCore:
         W = self.rng.normal(
             0.0,
             1.0,
-            (self.N, self.N),
+            (
+                self.N,
+                self.N,
+            ),
         )
 
-        W = (W + W.T) / 2.0
-        np.fill_diagonal(W, 0.0)
+        W = (
+            W
+            + W.T
+        ) / 2.0
 
-        max_abs = float(np.max(np.abs(W)))
+        np.fill_diagonal(
+            W,
+            0.0,
+        )
+
+        max_abs = float(
+            np.max(
+                np.abs(
+                    W
+                )
+            )
+        )
 
         if max_abs > 0.0:
-            W = W / max_abs
+            W = (
+                W
+                / max_abs
+            )
 
         if threshold is not None:
-            threshold_value = float(threshold)
+            threshold_value = float(
+                threshold
+            )
 
             if (
-                not np.isfinite(threshold_value)
+                not np.isfinite(
+                    threshold_value
+                )
                 or threshold_value < 0.0
             ):
                 raise ValueError(
-                    "threshold must be a finite non-negative value"
+                    "threshold must be a finite "
+                    "non-negative value"
                 )
 
             W = W * (
-                np.abs(W) >= threshold_value
+                np.abs(
+                    W
+                )
+                >= threshold_value
             )
 
-        elif float(sparsify) > 0.0:
-            sparsify_value = float(sparsify)
+        elif float(
+            sparsify
+        ) > 0.0:
+            sparsify_value = float(
+                sparsify
+            )
 
             if (
-                not np.isfinite(sparsify_value)
-                or not 0.0 <= sparsify_value <= 1.0
+                not np.isfinite(
+                    sparsify_value
+                )
+                or not 0.0
+                <= sparsify_value
+                <= 1.0
             ):
                 raise ValueError(
-                    "sparsify must be within [0, 1]"
+                    "sparsify must be within "
+                    "[0, 1]"
                 )
 
             cutoff = np.quantile(
-                np.abs(W),
+                np.abs(
+                    W
+                ),
                 sparsify_value,
             )
 
             W = W * (
-                np.abs(W) >= cutoff
+                np.abs(
+                    W
+                )
+                >= cutoff
             )
 
         rho = power_iteration_radius(
@@ -201,7 +295,10 @@ class RPUCore:
         )
 
         if rho > 1.0:
-            W = W / rho
+            W = (
+                W
+                / rho
+            )
 
         self.W = W
 
@@ -232,22 +329,31 @@ class RPUCore:
             mod_freq_depth
         )
 
-        if not np.isfinite(self.mod_amp_freq):
+        if not np.isfinite(
+            self.mod_amp_freq
+        ):
             raise ValueError(
                 "mod_amp_freq must be finite"
             )
 
-        if not np.isfinite(self.mod_amp_depth):
+        if not np.isfinite(
+            self.mod_amp_depth
+        ):
             raise ValueError(
                 "mod_amp_depth must be finite"
             )
 
-        if not np.isfinite(self.mod_freq_depth):
+        if not np.isfinite(
+            self.mod_freq_depth
+        ):
             raise ValueError(
                 "mod_freq_depth must be finite"
             )
 
-        self.anti_R = float(anti_R)
+        self.anti_R = float(
+            anti_R
+        )
+
         self.anti_duration = int(
             anti_duration
         )
@@ -260,14 +366,17 @@ class RPUCore:
             anti_sigma_boost
         )
 
-        if not np.isfinite(self.anti_R):
+        if not np.isfinite(
+            self.anti_R
+        ):
             raise ValueError(
                 "anti_R must be finite"
             )
 
         if self.anti_duration < 0:
             raise ValueError(
-                "anti_duration must be non-negative"
+                "anti_duration must be "
+                "non-negative"
             )
 
         if not np.isfinite(
@@ -289,6 +398,7 @@ class RPUCore:
             )
 
         self._antilock_timer = 0
+
         self._amp_scale_dyn = 1.0
 
         self.use_ternary = bool(
@@ -301,7 +411,9 @@ class RPUCore:
         )
 
         self.s = quantize_balanced(
-            np.cos(self.theta),
+            np.cos(
+                self.theta
+            ),
             t1=self.state_tau,
         )
 
@@ -329,7 +441,9 @@ class RPUCore:
         )
 
         if not np.all(
-            np.isfinite(profile)
+            np.isfinite(
+                profile
+            )
         ):
             raise ValueError(
                 f"{name} must contain "
@@ -365,9 +479,15 @@ class RPUCore:
             )
 
         if (
-            not np.all(np.isfinite(first))
+            not np.all(
+                np.isfinite(
+                    first
+                )
+            )
             or not np.all(
-                np.isfinite(second)
+                np.isfinite(
+                    second
+                )
             )
         ):
             raise ValueError(
@@ -375,14 +495,21 @@ class RPUCore:
                 "only finite values"
             )
 
-        if not np.isfinite(alpha_value):
+        if not np.isfinite(
+            alpha_value
+        ):
             raise ValueError(
                 "alpha must be finite"
             )
 
         return (
-            (1.0 - alpha_value) * first
-            + alpha_value * second
+            (
+                1.0
+                - alpha_value
+            )
+            * first
+            + alpha_value
+            * second
         )
 
     def lock(
@@ -436,7 +563,9 @@ class RPUCore:
             )
 
         self.s = quantize_balanced(
-            np.cos(self.theta),
+            np.cos(
+                self.theta
+            ),
             t1=self.state_tau,
         )
 
@@ -465,14 +594,25 @@ class RPUCore:
         )
 
         z = np.exp(
-            1j * phases
+            1j
+            * phases
         )
 
-        mean_z = np.mean(z)
+        mean_z = np.mean(
+            z
+        )
 
         return (
-            float(np.abs(mean_z)),
-            float(np.angle(mean_z)),
+            float(
+                np.abs(
+                    mean_z
+                )
+            ),
+            float(
+                np.angle(
+                    mean_z
+                )
+            ),
         )
 
     def measure(
@@ -491,8 +631,12 @@ class RPUCore:
 
         if kind == "clusters":
             labels = np.sign(
-                np.cos(self.theta)
-            ).astype(int)
+                np.cos(
+                    self.theta
+                )
+            ).astype(
+                int
+            )
 
             return {
                 "labels": labels.tolist()
@@ -533,7 +677,9 @@ class RPUCore:
             gain
         )
 
-        if not np.isfinite(gain_value):
+        if not np.isfinite(
+            gain_value
+        ):
             raise ValueError(
                 "gain must be finite"
             )
@@ -549,8 +695,12 @@ class RPUCore:
             )
 
         normalized = (
-            values - values.mean()
-        ) / std
+            (
+                values
+                - values.mean()
+            )
+            / std
+        )
 
         hebbian = np.outer(
             normalized,
@@ -564,18 +714,22 @@ class RPUCore:
 
         max_abs = float(
             np.max(
-                np.abs(hebbian)
+                np.abs(
+                    hebbian
+                )
             )
         )
 
         if max_abs > 0.0:
             hebbian = (
-                hebbian / max_abs
+                hebbian
+                / max_abs
             )
 
         self.W = np.tanh(
             self.W
-            + gain_value * hebbian
+            + gain_value
+            * hebbian
         )
 
         self.Wq = quantize_W(
@@ -590,8 +744,14 @@ class RPUCore:
         amp_now,
     ):
         phase_diff = (
-            theta[:, None]
-            - theta[None, :]
+            theta[
+                :,
+                None,
+            ]
+            - theta[
+                None,
+                :,
+            ]
         )
 
         coupling = np.sum(
@@ -606,13 +766,15 @@ class RPUCore:
         pll = (
             amp_now
             * np.sin(
-                ext_phase - theta
+                ext_phase
+                - theta
             )
         )
 
         return (
             self.omega
-            + self.kg * coupling
+            + self.kg
+            * coupling
             + pll
         )
 
@@ -620,19 +782,23 @@ class RPUCore:
         self,
     ):
         raw_control = (
-            self.Wq @ self.s
+            self.Wq
+            @ self.s
         )
 
         degree = np.maximum(
             np.sum(
-                np.abs(self.Wq),
+                np.abs(
+                    self.Wq
+                ),
                 axis=1,
             ),
             1,
         )
 
         normalized_control = (
-            raw_control / degree
+            raw_control
+            / degree
         )
 
         ternary_control = (
@@ -640,11 +806,14 @@ class RPUCore:
                 normalized_control,
                 t1=0.2,
             )
-            .astype(float)
+            .astype(
+                float
+            )
         )
 
         return (
-            0.15 * ternary_control
+            0.15
+            * ternary_control
         )
 
     def step(
@@ -681,7 +850,10 @@ class RPUCore:
 
             else:
                 amp_scale = 1.0
-                sigma = self.sigma_base
+
+                sigma = (
+                    self.sigma_base
+                )
 
             self._amp_scale_dyn = (
                 amp_scale
@@ -725,11 +897,9 @@ class RPUCore:
                 )
 
             else:
-                phase_bump = (
-                    np.zeros(
-                        self.N,
-                        dtype=float,
-                    )
+                phase_bump = np.zeros(
+                    self.N,
+                    dtype=float,
                 )
 
             if stability_guard:
@@ -745,7 +915,8 @@ class RPUCore:
                 )
 
                 factor = (
-                    scale * self.dt
+                    scale
+                    * self.dt
                 )
 
                 if factor > 0.1:
@@ -759,7 +930,8 @@ class RPUCore:
 
             self.ext_phase = (
                 self.ext_phase
-                + self.dt * freq_now
+                + self.dt
+                * freq_now
                 + phase_bump
             ) % TAU
 
@@ -771,7 +943,8 @@ class RPUCore:
 
             predictor = (
                 self.theta
-                + self.dt * k1
+                + self.dt
+                * k1
             ) % TAU
 
             k2 = self._dtheta(
@@ -781,7 +954,11 @@ class RPUCore:
             )
 
             dtheta = (
-                0.5 * (k1 + k2)
+                0.5
+                * (
+                    k1
+                    + k2
+                )
             )
 
             dtheta += (
@@ -795,10 +972,13 @@ class RPUCore:
 
             self.theta = (
                 self.theta
-                + self.dt * dtheta
+                + self.dt
+                * dtheta
             ) % TAU
 
-            self.t += self.dt
+            self.t += (
+                self.dt
+            )
 
             if self.use_ternary:
                 self.s = (
@@ -824,7 +1004,9 @@ class RPUCore:
                 )
 
 
-def build_core(args):
+def build_core(
+    args,
+):
     return RPUCore(
         args.N,
         seed=args.seed,
@@ -860,7 +1042,9 @@ def build_core(args):
     )
 
 
-def prepare_profiles(N):
+def prepare_profiles(
+    N,
+):
     x = np.linspace(
         0.0,
         TAU,
@@ -872,7 +1056,8 @@ def prepare_profiles(N):
         1.0
         + 0.2
         * np.sin(
-            3.0 * x
+            3.0
+            * x
         )
     )
 
@@ -880,18 +1065,23 @@ def prepare_profiles(N):
         1.0
         + 0.2
         * np.sin(
-            7.0 * x
-            + np.pi / 4.0
+            7.0
+            * x
+            + np.pi
+            / 4.0
         )
     )
 
     imprint_A = np.sin(
-        3.0 * x
+        3.0
+        * x
     )
 
     imprint_B = np.sin(
-        7.0 * x
-        + np.pi / 4.0
+        7.0
+        * x
+        + np.pi
+        / 4.0
     )
 
     return (
@@ -903,8 +1093,12 @@ def prepare_profiles(N):
     )
 
 
-def run_once(args):
-    rpu = build_core(args)
+def run_once(
+    args,
+):
+    rpu = build_core(
+        args
+    )
 
     (
         _,
@@ -934,21 +1128,26 @@ def run_once(args):
 
     rpu.lock(
         freq_profile=(
-            TAU * mix_ab
+            TAU
+            * mix_ab
         ),
         amp_profile=(
             args.amp
-            * np.ones(args.N)
+            * np.ones(
+                args.N
+            )
         ),
         reset_phase=True,
     )
 
     log_R = []
+
     log_phi = []
 
     for tact in range(
         1,
-        args.steps + 1,
+        args.steps
+        + 1,
     ):
         rpu.step(
             1,
@@ -961,18 +1160,25 @@ def run_once(args):
             tact
             % args.log_every
             == 0
-            or tact == args.steps
+            or tact
+            == args.steps
         ):
             measurement = (
-                rpu.measure("order")
+                rpu.measure(
+                    "order"
+                )
             )
 
             log_R.append(
-                measurement["R"]
+                measurement[
+                    "R"
+                ]
             )
 
             log_phi.append(
-                measurement["phi"]
+                measurement[
+                    "phi"
+                ]
             )
 
     order = rpu.measure(
@@ -989,7 +1195,9 @@ def run_once(args):
 
     unique_clusters = (
         np.unique(
-            clusters["labels"]
+            clusters[
+                "labels"
+            ]
         )
         .tolist()
     )
@@ -1013,26 +1221,30 @@ def run_once(args):
     print(
         f"[diag] R(t) "
         f"samples={len(log_R)} → "
-        f"{np.array2string("
-        f"np.array(log_R), "
-        f"precision=3, "
-        f"separator=', '"
-        f")}"
+        f"{np.array2string(
+            np.array(log_R),
+            precision=3,
+            separator=', ',
+        )}"
     )
 
     print(
         f"[diag] φ(t) "
         f"samples={len(log_phi)} → "
-        f"{np.array2string("
-        f"np.array(log_phi), "
-        f"precision=3, "
-        f"separator=', '"
-        f")}"
+        f"{np.array2string(
+            np.array(log_phi),
+            precision=3,
+            separator=', ',
+        )}"
     )
 
 
-def run_scan(args):
-    rpu = build_core(args)
+def run_scan(
+    args,
+):
+    rpu = build_core(
+        args
+    )
 
     (
         _,
@@ -1061,6 +1273,7 @@ def run_scan(args):
     )
 
     R_values = []
+
     cluster_counts = []
 
     for alpha in alphas:
@@ -1072,11 +1285,14 @@ def run_scan(args):
 
         rpu.lock(
             freq_profile=(
-                TAU * mix_ab
+                TAU
+                * mix_ab
             ),
             amp_profile=(
                 args.amp
-                * np.ones(args.N)
+                * np.ones(
+                    args.N
+                )
             ),
             reset_phase=True,
         )
@@ -1103,12 +1319,16 @@ def run_scan(args):
 
         cluster_count = len(
             set(
-                clusters["labels"]
+                clusters[
+                    "labels"
+                ]
             )
         )
 
         R_values.append(
-            order["R"]
+            order[
+                "R"
+            ]
         )
 
         cluster_counts.append(
@@ -1131,7 +1351,9 @@ def run_scan(args):
 
     R_jumps = np.where(
         np.abs(
-            np.diff(R_values)
+            np.diff(
+                R_values
+            )
         )
         > args.jump_thresh
     )[0]
@@ -1153,7 +1375,9 @@ def run_scan(args):
     candidates = [
         round(
             float(
-                alphas[index]
+                alphas[
+                    index
+                ]
             ),
             3,
         )
@@ -1169,11 +1393,11 @@ def run_scan(args):
 
     print(
         f"[scan] R(α) = "
-        f"{np.array2string("
-        f"R_values, "
-        f"precision=3, "
-        f"separator=', '"
-        f")}"
+        f"{np.array2string(
+            R_values,
+            precision=3,
+            separator=', ',
+        )}"
     )
 
     print(
@@ -1362,6 +1586,11 @@ if __name__ == "__main__":
     args = parse_args()
 
     if args.scan:
-        run_scan(args)
+        run_scan(
+            args
+        )
+
     else:
-        run_once(args)
+        run_once(
+            args
+        )
