@@ -1,0 +1,1408 @@
+name: Resonance Structural Invariants and Metamorphic Relations
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-structural-invariants-metamorphic-relations.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-structural-invariants-metamorphic-relations.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  structural-invariants:
+    name: Validate structural invariants and metamorphic relations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONHASHSEED: "0"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+          python -m pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q \
+            rpu_core \
+            plot_twa_results.py
+
+      - name: Validate balanced ternary reflection invariants
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import (
+              quantize_balanced,
+              quantize_W,
+          )
+
+
+          values = np.array(
+              [
+                  -1.00,
+                  -0.75,
+                  -0.50,
+                  -0.33,
+                  -0.20,
+                  0.00,
+                  0.20,
+                  0.33,
+                  0.50,
+                  0.75,
+                  1.00,
+              ],
+              dtype=float,
+          )
+
+          positive_quantization = (
+              quantize_balanced(
+                  values,
+                  t1=0.33,
+              )
+          )
+
+          reflected_quantization = (
+              quantize_balanced(
+                  -values,
+                  t1=0.33,
+              )
+          )
+
+          np.testing.assert_array_equal(
+              reflected_quantization,
+              -positive_quantization,
+          )
+
+          if not np.all(
+              np.isin(
+                  positive_quantization,
+                  (
+                      -1,
+                      0,
+                      1,
+                  ),
+              )
+          ):
+              raise RuntimeError(
+                  "Balanced ternary quantization "
+                  "produced a state outside "
+                  "{-1, 0, 1}."
+              )
+
+          matrix = np.array(
+              [
+                  [
+                      -1.00,
+                      -0.40,
+                      -0.10,
+                      0.00,
+                  ],
+                  [
+                      -0.30,
+                      -0.25,
+                      0.25,
+                      0.30,
+                  ],
+                  [
+                      -0.24,
+                      0.10,
+                      0.50,
+                      1.00,
+                  ],
+              ],
+              dtype=float,
+          )
+
+          quantized_matrix = quantize_W(
+              matrix,
+              thresh=0.25,
+          )
+
+          reflected_matrix = quantize_W(
+              -matrix,
+              thresh=0.25,
+          )
+
+          np.testing.assert_array_equal(
+              reflected_matrix,
+              -quantized_matrix,
+          )
+
+          if not np.all(
+              np.isin(
+                  quantized_matrix,
+                  (
+                      -1,
+                      0,
+                      1,
+                  ),
+              )
+          ):
+              raise RuntimeError(
+                  "Weight quantization produced "
+                  "a state outside {-1, 0, 1}."
+              )
+
+          zero_values = np.zeros(
+              16,
+              dtype=float,
+          )
+
+          zero_states = quantize_balanced(
+              zero_values,
+              t1=0.33,
+          )
+
+          np.testing.assert_array_equal(
+              zero_states,
+              np.zeros(
+                  16,
+                  dtype=np.int8,
+              ),
+          )
+
+          print(
+              "Balanced ternary reflection "
+              "invariants: PASS"
+          )
+          PY
+
+      - name: Validate RPU coupling and state structural invariants
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          num_nodes = 64
+
+          x = np.linspace(
+              0.0,
+              2.0 * np.pi,
+              num_nodes,
+              endpoint=False,
+          )
+
+          imprint_pattern = (
+              np.sin(
+                  3.0 * x
+              )
+              + 0.35
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              sigma=0.0,
+              ternary=True,
+              wq_thresh=0.30,
+          )
+
+          np.testing.assert_allclose(
+              core.W,
+              core.W.T,
+              rtol=0.0,
+              atol=0.0,
+          )
+
+          np.testing.assert_array_equal(
+              np.diag(
+                  core.W
+              ),
+              np.zeros(
+                  num_nodes,
+                  dtype=float,
+              ),
+          )
+
+          np.testing.assert_array_equal(
+              core.Wq,
+              core.Wq.T,
+          )
+
+          if not np.all(
+              np.isin(
+                  core.Wq,
+                  (
+                      -1,
+                      0,
+                      1,
+                  ),
+              )
+          ):
+              raise RuntimeError(
+                  "Initial quantized coupling "
+                  "matrix left the balanced "
+                  "ternary state space."
+              )
+
+          if not np.all(
+              np.isin(
+                  core.s,
+                  (
+                      -1,
+                      0,
+                      1,
+                  ),
+              )
+          ):
+              raise RuntimeError(
+                  "Initial RPU state left the "
+                  "balanced ternary state space."
+              )
+
+          core.imprint(
+              imprint_pattern,
+              gain=0.25,
+          )
+
+          np.testing.assert_allclose(
+              core.W,
+              core.W.T,
+              rtol=0.0,
+              atol=1.0e-15,
+          )
+
+          np.testing.assert_allclose(
+              np.diag(
+                  core.W
+              ),
+              np.zeros(
+                  num_nodes,
+                  dtype=float,
+              ),
+              rtol=0.0,
+              atol=1.0e-15,
+          )
+
+          np.testing.assert_array_equal(
+              core.Wq,
+              core.Wq.T,
+          )
+
+          if not np.all(
+              np.isin(
+                  core.Wq,
+                  (
+                      -1,
+                      0,
+                      1,
+                  ),
+              )
+          ):
+              raise RuntimeError(
+                  "Imprinted quantized coupling "
+                  "matrix left the balanced "
+                  "ternary state space."
+              )
+
+          core.step(
+              300,
+              stability_guard=False,
+          )
+
+          if not np.all(
+              np.isin(
+                  core.s,
+                  (
+                      -1,
+                      0,
+                      1,
+                  ),
+              )
+          ):
+              raise RuntimeError(
+                  "Evolved RPU state left the "
+                  "balanced ternary state space."
+              )
+
+          if not np.all(
+              np.isfinite(
+                  core.theta
+              )
+          ):
+              raise RuntimeError(
+                  "RPU structural validation "
+                  "produced non-finite phases."
+              )
+
+          print(
+              "RPU coupling and state "
+              "structural invariants: PASS"
+          )
+          PY
+
+      - name: Validate full RPU 2pi representation invariance
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import (
+              RPUCore,
+              quantize_balanced,
+          )
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 40
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              TAU
+              * (
+                  1.0
+                  + 0.13
+                  * np.sin(
+                      3.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.20
+              + 0.30
+              * (
+                  0.5
+                  + 0.5
+                  * np.cos(
+                      5.0 * x
+                  )
+              )
+          )
+
+
+          def build():
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.004,
+                  sigma=0.0,
+                  ternary=True,
+                  anti_R=2.0,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              return core
+
+
+          reference = build()
+
+          equivalent = build()
+
+          integer_turns = (
+              np.arange(
+                  num_nodes
+              )
+              % 7
+              - 3
+          )
+
+          equivalent.theta = (
+              equivalent.theta
+              + TAU
+              * integer_turns
+          )
+
+          equivalent.s = (
+              quantize_balanced(
+                  np.cos(
+                      equivalent.theta
+                  ),
+                  t1=(
+                      equivalent.state_tau
+                  ),
+              )
+          )
+
+          reference_order_before = (
+              reference.measure(
+                  "order"
+              )
+          )
+
+          equivalent_order_before = (
+              equivalent.measure(
+                  "order"
+              )
+          )
+
+          if abs(
+              reference_order_before[
+                  "R"
+              ]
+              - equivalent_order_before[
+                  "R"
+              ]
+          ) > 1.0e-14:
+              raise RuntimeError(
+                  "Adding integer multiples of "
+                  "2pi changed the initial "
+                  "order-parameter magnitude."
+              )
+
+          reference.step(
+              120,
+              stability_guard=False,
+          )
+
+          equivalent.step(
+              120,
+              stability_guard=False,
+          )
+
+          phase_difference = np.angle(
+              np.exp(
+                  1j
+                  * (
+                      equivalent.theta
+                      - reference.theta
+                  )
+              )
+          )
+
+          np.testing.assert_allclose(
+              phase_difference,
+              np.zeros(
+                  num_nodes,
+                  dtype=float,
+              ),
+              rtol=0.0,
+              atol=1.0e-11,
+          )
+
+          np.testing.assert_array_equal(
+              equivalent.s,
+              reference.s,
+          )
+
+          np.testing.assert_allclose(
+              equivalent.ext_phase,
+              reference.ext_phase,
+              rtol=0.0,
+              atol=1.0e-12,
+          )
+
+          reference_order_after = (
+              reference.measure(
+                  "order"
+              )
+          )
+
+          equivalent_order_after = (
+              equivalent.measure(
+                  "order"
+              )
+          )
+
+          if abs(
+              reference_order_after[
+                  "R"
+              ]
+              - equivalent_order_after[
+                  "R"
+              ]
+          ) > 1.0e-14:
+              raise RuntimeError(
+                  "Equivalent 2pi phase "
+                  "representations produced "
+                  "different final coherence."
+              )
+
+          print(
+              "Full RPU 2pi representation "
+              "invariance: PASS"
+          )
+          PY
+
+      - name: Validate order-parameter rotation invariance
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 96
+
+          shift = 0.731
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              sigma=0.0,
+              ternary=False,
+          )
+
+          original_theta = (
+              core.theta.copy()
+          )
+
+          rotated_theta = (
+              original_theta
+              + shift
+          ) % TAU
+
+          original_R, original_phi = (
+              core._order_param(
+                  original_theta
+              )
+          )
+
+          rotated_R, rotated_phi = (
+              core._order_param(
+                  rotated_theta
+              )
+          )
+
+          if abs(
+              original_R
+              - rotated_R
+          ) > 1.0e-14:
+              raise RuntimeError(
+                  "Global phase rotation "
+                  "changed order-parameter "
+                  "magnitude."
+              )
+
+          expected_phase_shift = np.angle(
+              np.exp(
+                  1j * shift
+              )
+          )
+
+          observed_phase_shift = np.angle(
+              np.exp(
+                  1j
+                  * (
+                      rotated_phi
+                      - original_phi
+                  )
+              )
+          )
+
+          phase_shift_error = np.angle(
+              np.exp(
+                  1j
+                  * (
+                      observed_phase_shift
+                      - expected_phase_shift
+                  )
+              )
+          )
+
+          if abs(
+              phase_shift_error
+          ) > 1.0e-14:
+              raise RuntimeError(
+                  "Global phase rotation "
+                  "did not produce the "
+                  "expected order-parameter "
+                  "phase shift."
+              )
+
+          print(
+              f"R={original_R:.12f}, "
+              f"shift={shift:.12f}, "
+              f"phase_error="
+              f"{phase_shift_error:.6e}"
+          )
+
+          print(
+              "Order-parameter rotation "
+              "invariance: PASS"
+          )
+          PY
+
+      - name: Validate continuous RPU global phase covariance
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 48
+
+          shift = 0.731
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              TAU
+              * (
+                  1.0
+                  + 0.17
+                  * np.sin(
+                      2.0 * x
+                  )
+                  + 0.04
+                  * np.cos(
+                      7.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.10
+              + 0.50
+              * (
+                  0.5
+                  + 0.5
+                  * np.sin(
+                      4.0 * x
+                      + 0.2
+                  )
+              )
+          )
+
+
+          def build():
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.003,
+                  sigma=0.0,
+                  ternary=False,
+                  anti_R=2.0,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              return core
+
+
+          reference = build()
+
+          rotated = build()
+
+          rotated.theta = (
+              rotated.theta
+              + shift
+          ) % TAU
+
+          rotated.ext_phase = (
+              rotated.ext_phase
+              + shift
+          ) % TAU
+
+          initial_reference_R = (
+              reference.measure(
+                  "order"
+              )[
+                  "R"
+              ]
+          )
+
+          initial_rotated_R = (
+              rotated.measure(
+                  "order"
+              )[
+                  "R"
+              ]
+          )
+
+          if abs(
+              initial_reference_R
+              - initial_rotated_R
+          ) > 1.0e-14:
+              raise RuntimeError(
+                  "Global rotation changed "
+                  "initial coherence."
+              )
+
+          reference.step(
+              300,
+              stability_guard=False,
+          )
+
+          rotated.step(
+              300,
+              stability_guard=False,
+          )
+
+          phase_covariance_error = np.angle(
+              np.exp(
+                  1j
+                  * (
+                      rotated.theta
+                      - reference.theta
+                      - shift
+                  )
+              )
+          )
+
+          external_phase_covariance_error = (
+              np.angle(
+                  np.exp(
+                      1j
+                      * (
+                          rotated.ext_phase
+                          - reference.ext_phase
+                          - shift
+                      )
+                  )
+              )
+          )
+
+          np.testing.assert_allclose(
+              phase_covariance_error,
+              np.zeros(
+                  num_nodes,
+                  dtype=float,
+              ),
+              rtol=0.0,
+              atol=2.0e-11,
+          )
+
+          np.testing.assert_allclose(
+              external_phase_covariance_error,
+              np.zeros(
+                  num_nodes,
+                  dtype=float,
+              ),
+              rtol=0.0,
+              atol=2.0e-11,
+          )
+
+          final_reference_R = (
+              reference.measure(
+                  "order"
+              )[
+                  "R"
+              ]
+          )
+
+          final_rotated_R = (
+              rotated.measure(
+                  "order"
+              )[
+                  "R"
+              ]
+          )
+
+          if abs(
+              final_reference_R
+              - final_rotated_R
+          ) > 1.0e-14:
+              raise RuntimeError(
+                  "Global phase-covariant "
+                  "evolution changed final "
+                  "coherence."
+              )
+
+          print(
+              f"final_R="
+              f"{final_reference_R:.12f}, "
+              f"maximum_phase_error="
+              f"{np.max(np.abs(phase_covariance_error)):.6e}"
+          )
+
+          print(
+              "Continuous RPU global phase "
+              "covariance: PASS"
+          )
+          PY
+
+      - name: Validate RPU node-relabeling covariance
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 36
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              TAU
+              * (
+                  1.0
+                  + 0.14
+                  * np.sin(
+                      3.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.20
+              + 0.40
+              * (
+                  0.5
+                  + 0.5
+                  * np.cos(
+                      5.0 * x
+                  )
+              )
+          )
+
+
+          def build():
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.004,
+                  sigma=0.0,
+                  ternary=True,
+                  anti_R=2.0,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              return core
+
+
+          reference = build()
+
+          relabeled = build()
+
+          permutation = (
+              np.random.default_rng(
+                  123
+              )
+              .permutation(
+                  num_nodes
+              )
+          )
+
+          vector_attributes = (
+              "omega",
+              "theta",
+              "ext_freq",
+              "ext_amp",
+              "ext_phase",
+              "s",
+          )
+
+          for attribute in (
+              vector_attributes
+          ):
+              setattr(
+                  relabeled,
+                  attribute,
+                  getattr(
+                      relabeled,
+                      attribute,
+                  )[
+                      permutation
+                  ].copy(),
+              )
+
+          relabeled.W = (
+              relabeled.W[
+                  np.ix_(
+                      permutation,
+                      permutation,
+                  )
+              ]
+              .copy()
+          )
+
+          relabeled.Wq = (
+              relabeled.Wq[
+                  np.ix_(
+                      permutation,
+                      permutation,
+                  )
+              ]
+              .copy()
+          )
+
+          reference.step(
+              250,
+              stability_guard=False,
+          )
+
+          relabeled.step(
+              250,
+              stability_guard=False,
+          )
+
+          phase_error = np.angle(
+              np.exp(
+                  1j
+                  * (
+                      relabeled.theta
+                      - reference.theta[
+                          permutation
+                      ]
+                  )
+              )
+          )
+
+          np.testing.assert_allclose(
+              phase_error,
+              np.zeros(
+                  num_nodes,
+                  dtype=float,
+              ),
+              rtol=0.0,
+              atol=2.0e-11,
+          )
+
+          external_phase_error = np.angle(
+              np.exp(
+                  1j
+                  * (
+                      relabeled.ext_phase
+                      - reference.ext_phase[
+                          permutation
+                      ]
+                  )
+              )
+          )
+
+          np.testing.assert_allclose(
+              external_phase_error,
+              np.zeros(
+                  num_nodes,
+                  dtype=float,
+              ),
+              rtol=0.0,
+              atol=2.0e-11,
+          )
+
+          np.testing.assert_array_equal(
+              relabeled.s,
+              reference.s[
+                  permutation
+              ],
+          )
+
+          np.testing.assert_allclose(
+              relabeled.W,
+              reference.W[
+                  np.ix_(
+                      permutation,
+                      permutation,
+                  )
+              ],
+              rtol=0.0,
+              atol=0.0,
+          )
+
+          np.testing.assert_array_equal(
+              relabeled.Wq,
+              reference.Wq[
+                  np.ix_(
+                      permutation,
+                      permutation,
+                  )
+              ],
+          )
+
+          reference_order = (
+              reference.measure(
+                  "order"
+              )
+          )
+
+          relabeled_order = (
+              relabeled.measure(
+                  "order"
+              )
+          )
+
+          if abs(
+              reference_order[
+                  "R"
+              ]
+              - relabeled_order[
+                  "R"
+              ]
+          ) > 1.0e-14:
+              raise RuntimeError(
+                  "Node relabeling changed "
+                  "the order-parameter "
+                  "magnitude."
+              )
+
+          phase_measurement_error = np.angle(
+              np.exp(
+                  1j
+                  * (
+                      relabeled_order[
+                          "phi"
+                      ]
+                      - reference_order[
+                          "phi"
+                      ]
+                  )
+              )
+          )
+
+          if abs(
+              phase_measurement_error
+          ) > 1.0e-14:
+              raise RuntimeError(
+                  "Node relabeling changed "
+                  "the mean phase."
+              )
+
+          print(
+              f"maximum_phase_error="
+              f"{np.max(np.abs(phase_error)):.6e}, "
+              f"R="
+              f"{reference_order['R']:.12f}"
+          )
+
+          print(
+              "RPU node-relabeling "
+              "covariance: PASS"
+          )
+          PY
+
+      - name: Validate Bloch stationary-state fixed points
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              rk4_step,
+              steady_state_bloch,
+          )
+
+
+          cases = (
+              (
+                  1.0,
+                  0.20,
+                  0.00,
+              ),
+              (
+                  1.0,
+                  0.35,
+                  0.40,
+              ),
+              (
+                  2.0,
+                  0.70,
+                  -0.30,
+              ),
+          )
+
+          for (
+              Omega,
+              gamma,
+              delta,
+          ) in cases:
+              stationary = (
+                  steady_state_bloch(
+                      Omega,
+                      gamma,
+                      delta,
+                  )
+              )
+
+              residual = bloch_rhs(
+                  0.0,
+                  stationary,
+                  Omega,
+                  gamma,
+                  delta,
+              )
+
+              residual_norm = float(
+                  np.linalg.norm(
+                      residual
+                  )
+              )
+
+              if residual_norm > 1.0e-12:
+                  raise RuntimeError(
+                      "Analytical Bloch "
+                      "stationary state is not "
+                      "a numerical fixed point: "
+                      f"{residual_norm:.6e}"
+                  )
+
+              evolved = (
+                  stationary.copy()
+              )
+
+              t = 0.0
+
+              for _ in range(
+                  1000
+              ):
+                  evolved = rk4_step(
+                      bloch_rhs,
+                      evolved,
+                      t,
+                      0.01,
+                      (
+                          Omega,
+                          gamma,
+                          delta,
+                      ),
+                  )
+
+                  t += 0.01
+
+              fixed_point_error = float(
+                  np.linalg.norm(
+                      evolved
+                      - stationary
+                  )
+              )
+
+              if fixed_point_error > 1.0e-11:
+                  raise RuntimeError(
+                      "RK4 evolution moved an "
+                      "analytical stationary "
+                      "Bloch state: "
+                      f"{fixed_point_error:.6e}"
+                  )
+
+              print(
+                  f"Omega={Omega:g}, "
+                  f"gamma={gamma:g}, "
+                  f"delta={delta:g}, "
+                  f"residual="
+                  f"{residual_norm:.6e}, "
+                  f"fixed_point_error="
+                  f"{fixed_point_error:.6e}"
+              )
+
+          print(
+              "Bloch stationary-state "
+              "fixed-point invariants: PASS"
+          )
+          PY
+
+      - name: Validate autonomous Bloch time-translation invariance
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              rk4_step,
+          )
+
+
+          Omega = 1.0
+          gamma = 0.2
+          delta = 0.35
+
+          initial_state = np.array(
+              [
+                  0.20,
+                  -0.10,
+                  -0.80,
+              ],
+              dtype=float,
+          )
+
+          derivative_at_zero = bloch_rhs(
+              0.0,
+              initial_state,
+              Omega,
+              gamma,
+              delta,
+          )
+
+          derivative_at_shifted_time = (
+              bloch_rhs(
+                  12345.678,
+                  initial_state,
+                  Omega,
+                  gamma,
+                  delta,
+              )
+          )
+
+          np.testing.assert_array_equal(
+              derivative_at_zero,
+              derivative_at_shifted_time,
+          )
+
+          one_step_zero_origin = rk4_step(
+              bloch_rhs,
+              initial_state,
+              0.0,
+              0.01,
+              (
+                  Omega,
+                  gamma,
+                  delta,
+              ),
+          )
+
+          one_step_shifted_origin = rk4_step(
+              bloch_rhs,
+              initial_state,
+              999.0,
+              0.01,
+              (
+                  Omega,
+                  gamma,
+                  delta,
+              ),
+          )
+
+          np.testing.assert_array_equal(
+              one_step_zero_origin,
+              one_step_shifted_origin,
+          )
+
+
+          def integrate(
+              time_origin,
+          ):
+              state = (
+                  initial_state.copy()
+              )
+
+              t = float(
+                  time_origin
+              )
+
+              for _ in range(
+                  1000
+              ):
+                  state = rk4_step(
+                      bloch_rhs,
+                      state,
+                      t,
+                      0.005,
+                      (
+                          Omega,
+                          gamma,
+                          delta,
+                      ),
+                  )
+
+                  t += 0.005
+
+              return state
+
+
+          trajectory_zero_origin = (
+              integrate(
+                  0.0
+              )
+          )
+
+          trajectory_shifted_origin = (
+              integrate(
+                  1000000.0
+              )
+          )
+
+          np.testing.assert_array_equal(
+              trajectory_zero_origin,
+              trajectory_shifted_origin,
+          )
+
+          print(
+              "Autonomous Bloch "
+              "time-translation invariance: PASS"
+          )
+          PY
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during structural-invariant validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report structural validation result
+        run: |
+          echo "Resonance structural invariants and metamorphic relations validation: PASS"
