@@ -1,0 +1,1336 @@
+name: Resonance Perturbation Robustness and Sensitivity
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-perturbation-robustness-sensitivity.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-perturbation-robustness-sensitivity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  perturbation-sensitivity:
+    name: Validate perturbation robustness and sensitivity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONHASHSEED: "0"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+          python -m pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q \
+            rpu_core \
+            plot_twa_results.py
+
+      - name: Validate RPU initial-phase perturbation scaling
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 48
+
+          steps = 120
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              TAU
+              * (
+                  1.0
+                  + 0.12
+                  * np.sin(
+                      3.0 * x
+                  )
+                  + 0.04
+                  * np.cos(
+                      7.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.20
+              + 0.30
+              * (
+                  0.5
+                  + 0.5
+                  * np.sin(
+                      5.0 * x
+                      + 0.2
+                  )
+              )
+          )
+
+          perturbation = (
+              np.sin(
+                  2.0 * x
+              )
+              + 0.30
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+          perturbation /= (
+              np.linalg.norm(
+                  perturbation
+              )
+              / np.sqrt(
+                  num_nodes
+              )
+          )
+
+
+          def build():
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.003,
+                  sigma=0.0,
+                  ternary=False,
+                  anti_R=2.0,
+                  k_global=0.5,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              return core
+
+
+          def phase_distance(
+              first,
+              second,
+          ):
+              return float(
+                  np.linalg.norm(
+                      np.exp(
+                          1j * first
+                      )
+                      - np.exp(
+                          1j * second
+                      )
+                  )
+                  / np.sqrt(
+                      first.size
+                  )
+              )
+
+
+          reference = build()
+
+          reference.step(
+              steps,
+              stability_guard=False,
+          )
+
+          epsilons = (
+              1.0e-6,
+              2.0e-6,
+              4.0e-6,
+          )
+
+          responses = []
+
+          for epsilon in (
+              epsilons
+          ):
+              perturbed = build()
+
+              perturbed.theta = (
+                  perturbed.theta
+                  + epsilon
+                  * perturbation
+              ) % TAU
+
+              perturbed.step(
+                  steps,
+                  stability_guard=False,
+              )
+
+              response = phase_distance(
+                  perturbed.theta,
+                  reference.theta,
+              )
+
+              if (
+                  not np.isfinite(
+                      response
+                  )
+                  or response <= 0.0
+              ):
+                  raise RuntimeError(
+                      "Invalid phase-perturbation "
+                      "response for "
+                      f"epsilon={epsilon}: "
+                      f"{response}"
+                  )
+
+              responses.append(
+                  response
+              )
+
+              print(
+                  f"epsilon={epsilon:.1e}, "
+                  f"response={response:.12e}, "
+                  f"gain="
+                  f"{response / epsilon:.12e}"
+              )
+
+          if not (
+              responses[0]
+              < responses[1]
+              < responses[2]
+          ):
+              raise RuntimeError(
+                  "Phase-perturbation responses "
+                  "are not monotonic: "
+                  f"{responses}"
+              )
+
+          ratios = (
+              responses[1]
+              / responses[0],
+              responses[2]
+              / responses[1],
+          )
+
+          if any(
+              abs(
+                  ratio
+                  - 2.0
+              )
+              > 0.05
+              for ratio
+              in ratios
+          ):
+              raise RuntimeError(
+                  "Small phase perturbations "
+                  "left the local "
+                  "linear-response regime: "
+                  f"{ratios}"
+              )
+
+          maximum_gain = max(
+              response
+              / epsilon
+              for (
+                  response,
+                  epsilon,
+              )
+              in zip(
+                  responses,
+                  epsilons,
+              )
+          )
+
+          if maximum_gain > 10.0:
+              raise RuntimeError(
+                  "Short-horizon phase "
+                  "perturbation gain exceeded "
+                  "the safety bound: "
+                  f"{maximum_gain}"
+              )
+
+          print(
+              "RPU initial-phase perturbation "
+              "scaling: PASS"
+          )
+          PY
+
+      - name: Validate RPU drive-profile perturbation sensitivity
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 48
+
+          steps = 150
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              TAU
+              * (
+                  1.0
+                  + 0.12
+                  * np.sin(
+                      3.0 * x
+                  )
+                  + 0.04
+                  * np.cos(
+                      7.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.20
+              + 0.30
+              * (
+                  0.5
+                  + 0.5
+                  * np.sin(
+                      5.0 * x
+                      + 0.2
+                  )
+              )
+          )
+
+          perturbation = (
+              np.cos(
+                  4.0 * x
+              )
+              - 0.20
+              * np.sin(
+                  9.0 * x
+              )
+          )
+
+          perturbation /= (
+              np.linalg.norm(
+                  perturbation
+              )
+              / np.sqrt(
+                  num_nodes
+              )
+          )
+
+
+          def run(
+              frequency,
+              amplitude,
+          ):
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.003,
+                  sigma=0.0,
+                  ternary=False,
+                  anti_R=2.0,
+                  k_global=0.5,
+              )
+
+              core.lock(
+                  freq_profile=frequency,
+                  amp_profile=amplitude,
+                  reset_phase=True,
+              )
+
+              core.step(
+                  steps,
+                  stability_guard=False,
+              )
+
+              return (
+                  core.theta.copy()
+              )
+
+
+          def phase_distance(
+              first,
+              second,
+          ):
+              return float(
+                  np.linalg.norm(
+                      np.exp(
+                          1j * first
+                      )
+                      - np.exp(
+                          1j * second
+                      )
+                  )
+                  / np.sqrt(
+                      first.size
+                  )
+              )
+
+
+          reference = run(
+              frequency_profile,
+              amplitude_profile,
+          )
+
+          epsilons = (
+              1.0e-5,
+              2.0e-5,
+              4.0e-5,
+          )
+
+          perturbation_cases = (
+              (
+                  "frequency",
+                  lambda epsilon: (
+                      frequency_profile
+                      + epsilon
+                      * perturbation,
+                      amplitude_profile,
+                  ),
+              ),
+              (
+                  "amplitude",
+                  lambda epsilon: (
+                      frequency_profile,
+                      amplitude_profile
+                      + epsilon
+                      * perturbation,
+                  ),
+              ),
+          )
+
+          for (
+              label,
+              builder,
+          ) in perturbation_cases:
+              responses = []
+
+              for epsilon in (
+                  epsilons
+              ):
+                  (
+                      frequency,
+                      amplitude,
+                  ) = builder(
+                      epsilon
+                  )
+
+                  perturbed = run(
+                      frequency,
+                      amplitude,
+                  )
+
+                  response = (
+                      phase_distance(
+                          perturbed,
+                          reference,
+                      )
+                  )
+
+                  if (
+                      not np.isfinite(
+                          response
+                      )
+                      or response <= 0.0
+                  ):
+                      raise RuntimeError(
+                          f"Invalid {label} "
+                          "perturbation response "
+                          f"for epsilon={epsilon}: "
+                          f"{response}"
+                      )
+
+                  responses.append(
+                      response
+                  )
+
+                  print(
+                      f"{label}: "
+                      f"epsilon={epsilon:.1e}, "
+                      f"response="
+                      f"{response:.12e}, "
+                      f"gain="
+                      f"{response / epsilon:.12e}"
+                  )
+
+              if not (
+                  responses[0]
+                  < responses[1]
+                  < responses[2]
+              ):
+                  raise RuntimeError(
+                      f"{label} perturbation "
+                      "responses are not "
+                      "monotonic: "
+                      f"{responses}"
+                  )
+
+              ratios = (
+                  responses[1]
+                  / responses[0],
+                  responses[2]
+                  / responses[1],
+              )
+
+              if any(
+                  abs(
+                      ratio
+                      - 2.0
+                  )
+                  > 0.05
+                  for ratio
+                  in ratios
+              ):
+                  raise RuntimeError(
+                      f"{label} perturbation "
+                      "response left the local "
+                      "linear regime: "
+                      f"{ratios}"
+                  )
+
+          print(
+              "RPU drive-profile perturbation "
+              "sensitivity: PASS"
+          )
+          PY
+
+      - name: Validate RPU parameter-sensitivity derivative convergence
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+          from rpu_core.rpu_core_v1 import (
+              TAU,
+          )
+
+
+          num_nodes = 40
+
+          steps = 120
+
+          base_coupling = 0.5
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              TAU
+              * (
+                  1.0
+                  + 0.10
+                  * np.sin(
+                      3.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.20
+              + 0.25
+              * (
+                  0.5
+                  + 0.5
+                  * np.cos(
+                      5.0 * x
+                  )
+              )
+          )
+
+
+          def run(
+              coupling,
+          ):
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.003,
+                  sigma=0.0,
+                  ternary=False,
+                  anti_R=2.0,
+                  k_global=coupling,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              core.step(
+                  steps,
+                  stability_guard=False,
+              )
+
+              return np.exp(
+                  1j
+                  * core.theta
+              )
+
+
+          derivatives = []
+
+          refinement_steps = (
+              1.0e-2,
+              5.0e-3,
+              2.5e-3,
+              1.25e-3,
+          )
+
+          for step in (
+              refinement_steps
+          ):
+              derivative = (
+                  run(
+                      base_coupling
+                      + step
+                  )
+                  - run(
+                      base_coupling
+                      - step
+                  )
+              ) / (
+                  2.0
+                  * step
+              )
+
+              if not np.all(
+                  np.isfinite(
+                      derivative
+                  )
+              ):
+                  raise RuntimeError(
+                      "Non-finite centered "
+                      "sensitivity derivative "
+                      f"for step={step}"
+                  )
+
+              derivatives.append(
+                  derivative
+              )
+
+              print(
+                  f"h={step:.4e}, "
+                  f"derivative_norm="
+                  f"{np.linalg.norm(derivative):.12e}"
+              )
+
+          errors = [
+              float(
+                  np.linalg.norm(
+                      first
+                      - second
+                  )
+                  / np.sqrt(
+                      num_nodes
+                  )
+              )
+              for (
+                  first,
+                  second,
+              )
+              in zip(
+                  derivatives,
+                  derivatives[
+                      1:
+                  ],
+              )
+          ]
+
+          if not (
+              errors[0]
+              > errors[1]
+              > errors[2]
+              > 0.0
+          ):
+              raise RuntimeError(
+                  "Centered RPU sensitivity "
+                  "derivatives did not converge "
+                  "monotonically: "
+                  f"{errors}"
+              )
+
+          ratios = (
+              errors[0]
+              / errors[1],
+              errors[1]
+              / errors[2],
+          )
+
+          if min(
+              ratios
+          ) < 3.5:
+              raise RuntimeError(
+                  "Centered RPU sensitivity "
+                  "derivative convergence fell "
+                  "below second-order "
+                  "expectation: "
+                  f"{ratios}"
+              )
+
+          print(
+              f"Derivative refinement errors: "
+              f"{errors}"
+          )
+
+          print(
+              f"Derivative refinement ratios: "
+              f"{ratios}"
+          )
+
+          print(
+              "RPU parameter-sensitivity "
+              "derivative convergence: PASS"
+          )
+          PY
+
+      - name: Validate Bloch perturbation linearity and superposition
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              rk4_step,
+          )
+
+
+          Omega = 1.0
+
+          gamma = 0.2
+
+          delta = 0.35
+
+          dt = 0.005
+
+          steps = 1000
+
+          base_state = np.array(
+              [
+                  0.2,
+                  -0.1,
+                  -0.9,
+              ],
+              dtype=float,
+          )
+
+          first_direction = np.array(
+              [
+                  0.4,
+                  -0.3,
+                  0.2,
+              ],
+              dtype=float,
+          )
+
+          second_direction = np.array(
+              [
+                  -0.1,
+                  0.5,
+                  0.25,
+              ],
+              dtype=float,
+          )
+
+          first_direction /= (
+              np.linalg.norm(
+                  first_direction
+              )
+          )
+
+          second_direction /= (
+              np.linalg.norm(
+                  second_direction
+              )
+          )
+
+
+          def integrate(
+              initial_state,
+          ):
+              state = np.asarray(
+                  initial_state,
+                  dtype=float,
+              ).copy()
+
+              t = 0.0
+
+              for _ in range(
+                  steps
+              ):
+                  state = rk4_step(
+                      bloch_rhs,
+                      state,
+                      t,
+                      dt,
+                      (
+                          Omega,
+                          gamma,
+                          delta,
+                      ),
+                  )
+
+                  t += dt
+
+              return state
+
+
+          baseline = integrate(
+              base_state
+          )
+
+          epsilons = (
+              1.0e-6,
+              2.0e-6,
+              4.0e-6,
+          )
+
+          responses = []
+
+          for epsilon in (
+              epsilons
+          ):
+              response = (
+                  integrate(
+                      base_state
+                      + epsilon
+                      * first_direction
+                  )
+                  - baseline
+              )
+
+              response_norm = float(
+                  np.linalg.norm(
+                      response
+                  )
+              )
+
+              if (
+                  not np.isfinite(
+                      response_norm
+                  )
+                  or response_norm <= 0.0
+              ):
+                  raise RuntimeError(
+                      "Invalid Bloch "
+                      "perturbation response "
+                      f"for epsilon={epsilon}: "
+                      f"{response_norm}"
+                  )
+
+              responses.append(
+                  response_norm
+              )
+
+              print(
+                  f"epsilon={epsilon:.1e}, "
+                  f"response="
+                  f"{response_norm:.12e}, "
+                  f"gain="
+                  f"{response_norm / epsilon:.12e}"
+              )
+
+          ratios = (
+              responses[1]
+              / responses[0],
+              responses[2]
+              / responses[1],
+          )
+
+          if any(
+              abs(
+                  ratio
+                  - 2.0
+              )
+              > 1.0e-6
+              for ratio
+              in ratios
+          ):
+              raise RuntimeError(
+                  "Bloch initial-state "
+                  "perturbations violated "
+                  "linear response: "
+                  f"{ratios}"
+              )
+
+          epsilon = 1.0e-4
+
+          response_first = (
+              integrate(
+                  base_state
+                  + epsilon
+                  * first_direction
+              )
+              - baseline
+          )
+
+          response_second = (
+              integrate(
+                  base_state
+                  + epsilon
+                  * second_direction
+              )
+              - baseline
+          )
+
+          response_combined = (
+              integrate(
+                  base_state
+                  + epsilon
+                  * (
+                      first_direction
+                      + second_direction
+                  )
+              )
+              - baseline
+          )
+
+          superposition_error = float(
+              np.linalg.norm(
+                  response_combined
+                  - (
+                      response_first
+                      + response_second
+                  )
+              )
+          )
+
+          if (
+              superposition_error
+              > 1.0e-12
+          ):
+              raise RuntimeError(
+                  "Bloch perturbation "
+                  "superposition error "
+                  "exceeded tolerance: "
+                  f"{superposition_error:.6e}"
+              )
+
+          print(
+              f"superposition_error="
+              f"{superposition_error:.6e}"
+          )
+
+          print(
+              "Bloch perturbation linearity "
+              "and superposition: PASS"
+          )
+          PY
+
+      - name: Validate Bloch parameter-sensitivity derivative convergence
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              rk4_step,
+          )
+
+
+          Omega = 1.0
+
+          gamma = 0.2
+
+          base_delta = 0.35
+
+          dt = 0.005
+
+          steps = 800
+
+          initial_state = np.array(
+              [
+                  0.2,
+                  -0.1,
+                  -0.9,
+              ],
+              dtype=float,
+          )
+
+
+          def run(
+              delta,
+          ):
+              state = (
+                  initial_state.copy()
+              )
+
+              t = 0.0
+
+              for _ in range(
+                  steps
+              ):
+                  state = rk4_step(
+                      bloch_rhs,
+                      state,
+                      t,
+                      dt,
+                      (
+                          Omega,
+                          gamma,
+                          delta,
+                      ),
+                  )
+
+                  t += dt
+
+              return state
+
+
+          derivatives = []
+
+          refinement_steps = (
+              2.0e-2,
+              1.0e-2,
+              5.0e-3,
+              2.5e-3,
+          )
+
+          for step in (
+              refinement_steps
+          ):
+              derivative = (
+                  run(
+                      base_delta
+                      + step
+                  )
+                  - run(
+                      base_delta
+                      - step
+                  )
+              ) / (
+                  2.0
+                  * step
+              )
+
+              if not np.all(
+                  np.isfinite(
+                      derivative
+                  )
+              ):
+                  raise RuntimeError(
+                      "Non-finite Bloch "
+                      "sensitivity derivative "
+                      f"for step={step}"
+                  )
+
+              derivatives.append(
+                  derivative
+              )
+
+              print(
+                  f"h={step:.4e}, "
+                  f"derivative="
+                  f"{derivative.tolist()}"
+              )
+
+          errors = [
+              float(
+                  np.linalg.norm(
+                      first
+                      - second
+                  )
+              )
+              for (
+                  first,
+                  second,
+              )
+              in zip(
+                  derivatives,
+                  derivatives[
+                      1:
+                  ],
+              )
+          ]
+
+          if not (
+              errors[0]
+              > errors[1]
+              > errors[2]
+              > 0.0
+          ):
+              raise RuntimeError(
+                  "Bloch parameter "
+                  "sensitivity derivatives "
+                  "did not converge "
+                  "monotonically: "
+                  f"{errors}"
+              )
+
+          ratios = (
+              errors[0]
+              / errors[1],
+              errors[1]
+              / errors[2],
+          )
+
+          if min(
+              ratios
+          ) < 3.5:
+              raise RuntimeError(
+                  "Bloch centered sensitivity "
+                  "convergence fell below "
+                  "second-order expectation: "
+                  f"{ratios}"
+              )
+
+          print(
+              f"Derivative refinement errors: "
+              f"{errors}"
+          )
+
+          print(
+              f"Derivative refinement ratios: "
+              f"{ratios}"
+          )
+
+          print(
+              "Bloch parameter-sensitivity "
+              "derivative convergence: PASS"
+          )
+          PY
+
+      - name: Validate dissipative Bloch perturbation recovery
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              rk4_step,
+              steady_state_bloch,
+          )
+
+
+          cases = (
+              (
+                  1.0,
+                  0.1,
+                  0.0,
+              ),
+              (
+                  1.0,
+                  0.2,
+                  0.35,
+              ),
+              (
+                  2.0,
+                  0.5,
+                  -0.4,
+              ),
+          )
+
+          direction = np.array(
+              [
+                  0.3,
+                  -0.2,
+                  0.4,
+              ],
+              dtype=float,
+          )
+
+          direction /= (
+              np.linalg.norm(
+                  direction
+              )
+          )
+
+          for (
+              Omega,
+              gamma,
+              delta,
+          ) in cases:
+              stationary = (
+                  steady_state_bloch(
+                      Omega,
+                      gamma,
+                      delta,
+                  )
+              )
+
+              state = (
+                  stationary
+                  + 0.1
+                  * direction
+              )
+
+              initial_error = float(
+                  np.linalg.norm(
+                      state
+                      - stationary
+                  )
+              )
+
+              errors = []
+
+              t = 0.0
+
+              dt = 0.005
+
+              for _ in range(
+                  20
+              ):
+                  for _ in range(
+                      200
+                  ):
+                      state = rk4_step(
+                          bloch_rhs,
+                          state,
+                          t,
+                          dt,
+                          (
+                              Omega,
+                              gamma,
+                              delta,
+                          ),
+                      )
+
+                      t += dt
+
+                  error = float(
+                      np.linalg.norm(
+                          state
+                          - stationary
+                      )
+                  )
+
+                  if not np.isfinite(
+                      error
+                  ):
+                      raise RuntimeError(
+                          "Non-finite "
+                          "perturbation-recovery "
+                          "error."
+                      )
+
+                  errors.append(
+                      error
+                  )
+
+              comparison_errors = [
+                  initial_error
+              ] + errors[
+                  :-1
+              ]
+
+              if not all(
+                  later
+                  < earlier
+                  for (
+                      earlier,
+                      later,
+                  )
+                  in zip(
+                      comparison_errors,
+                      errors,
+                  )
+              ):
+                  raise RuntimeError(
+                      "Bloch perturbation did "
+                      "not decay monotonically "
+                      f"for Omega={Omega}, "
+                      f"gamma={gamma}, "
+                      f"delta={delta}: "
+                      f"{errors}"
+                  )
+
+              if (
+                  errors[
+                      -1
+                  ]
+                  >= 0.5
+                  * initial_error
+              ):
+                  raise RuntimeError(
+                      "Bloch perturbation "
+                      "recovery was too weak "
+                      f"for Omega={Omega}, "
+                      f"gamma={gamma}, "
+                      f"delta={delta}: "
+                      f"initial="
+                      f"{initial_error}, "
+                      f"final="
+                      f"{errors[-1]}"
+                  )
+
+              print(
+                  f"Omega={Omega:g}, "
+                  f"gamma={gamma:g}, "
+                  f"delta={delta:g}, "
+                  f"initial_error="
+                  f"{initial_error:.12e}, "
+                  f"final_error="
+                  f"{errors[-1]:.12e}"
+              )
+
+          print(
+              "Dissipative Bloch perturbation "
+              "recovery: PASS"
+          )
+          PY
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during perturbation validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report perturbation validation result
+        run: |
+          echo "Resonance perturbation robustness and sensitivity validation: PASS"
