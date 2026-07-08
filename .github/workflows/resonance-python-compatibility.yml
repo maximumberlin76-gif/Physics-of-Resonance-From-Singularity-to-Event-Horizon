@@ -1,0 +1,534 @@
+name: Resonance Python Compatibility
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-python-compatibility.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-python-compatibility.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      MPLBACKEND: Agg
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy matplotlib
+          python -m pip check
+
+      - name: Report interpreter and dependency versions
+        run: |
+          python --version
+
+          python - <<'PY'
+          import matplotlib
+          import numpy
+
+          print(f"NumPy {numpy.__version__}")
+          print(f"Matplotlib {matplotlib.__version__}")
+          PY
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q rpu_core plot_twa_results.py
+
+      - name: Validate public package API
+        run: |
+          python - <<'PY'
+          from rpu_core import (
+              RPUCore,
+              power_iteration_radius,
+              quantize_balanced,
+              quantize_W,
+          )
+
+          exported = (
+              RPUCore,
+              power_iteration_radius,
+              quantize_balanced,
+              quantize_W,
+          )
+
+          if any(item is None for item in exported):
+              raise RuntimeError(
+                  "Public RPU API import failed."
+              )
+
+          print(
+              "Public RPU API validation: PASS"
+          )
+          PY
+
+      - name: Execute RPU core
+        run: |
+          python rpu_core/rpu_core_v1.py \
+            --N 32 \
+            --steps 64 \
+            --log-every 16 \
+            --seed 76 \
+            --sigma 0.01 \
+            --amp 0.5
+
+      - name: Execute RPU scan path
+        run: |
+          python rpu_core/rpu_core_v1.py \
+            --N 24 \
+            --scan \
+            --scan-points 5 \
+            --scan-steps 32 \
+            --seed 76 \
+            --sigma 0.01 \
+            --amp 0.5
+
+      - name: Validate RPU behavioral invariants
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import (
+              RPUCore,
+              quantize_W,
+          )
+
+
+          num_nodes = 24
+
+          frequency_profile = np.linspace(
+              0.25,
+              1.25,
+              num_nodes,
+          )
+
+          amplitude_profile = np.linspace(
+              0.0,
+              1.0,
+              num_nodes,
+          )
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              sigma=0.0,
+              ternary=False,
+          )
+
+          core.lock(
+              freq_profile=frequency_profile,
+              amp_profile=amplitude_profile,
+              reset_phase=True,
+          )
+
+          np.testing.assert_array_equal(
+              core.ext_freq,
+              frequency_profile,
+          )
+
+          np.testing.assert_array_equal(
+              core.ext_amp,
+              amplitude_profile,
+          )
+
+          np.testing.assert_array_equal(
+              core.ext_phase,
+              np.zeros(
+                  num_nodes
+              ),
+          )
+
+          threshold = 0.90
+
+          threshold_core = RPUCore(
+              num_nodes,
+              seed=76,
+              wq_thresh=threshold,
+          )
+
+          pattern = np.sin(
+              np.linspace(
+                  0.0,
+                  2.0 * np.pi,
+                  num_nodes,
+                  endpoint=False,
+              )
+          )
+
+          threshold_core.imprint(
+              pattern,
+              gain=0.25,
+          )
+
+          expected_quantized_weights = (
+              quantize_W(
+                  threshold_core.W,
+                  thresh=threshold,
+              )
+          )
+
+          np.testing.assert_array_equal(
+              threshold_core.Wq,
+              expected_quantized_weights,
+          )
+
+          if (
+              threshold_core.wq_thresh
+              != threshold
+          ):
+              raise RuntimeError(
+                  "wq_thresh was not preserved "
+                  "after imprint()."
+              )
+
+          common = {
+              "N": num_nodes,
+              "seed": 76,
+              "sigma": 0.0,
+              "ternary": False,
+              "anti_R": 2.0,
+          }
+
+          undriven = RPUCore(
+              **common
+          )
+
+          driven = RPUCore(
+              **common
+          )
+
+          drive_frequency = np.full(
+              num_nodes,
+              2.0 * np.pi,
+          )
+
+          undriven.lock(
+              freq_profile=drive_frequency,
+              amp_profile=np.zeros(
+                  num_nodes
+              ),
+              reset_phase=True,
+          )
+
+          driven.lock(
+              freq_profile=drive_frequency,
+              amp_profile=np.full(
+                  num_nodes,
+                  2.0,
+              ),
+              reset_phase=True,
+          )
+
+          undriven.step(
+              50,
+              stability_guard=False,
+          )
+
+          driven.step(
+              50,
+              stability_guard=False,
+          )
+
+          if np.allclose(
+              undriven.theta,
+              driven.theta,
+              rtol=0.0,
+              atol=1.0e-12,
+          ):
+              raise RuntimeError(
+                  "External resonant drive "
+                  "did not alter the trajectory."
+              )
+
+          replay_a = RPUCore(
+              num_nodes,
+              seed=76,
+              sigma=0.02,
+          )
+
+          replay_b = RPUCore(
+              num_nodes,
+              seed=76,
+              sigma=0.02,
+          )
+
+          replay_a.lock(
+              freq_profile=frequency_profile,
+              amp_profile=amplitude_profile,
+              reset_phase=True,
+          )
+
+          replay_b.lock(
+              freq_profile=frequency_profile,
+              amp_profile=amplitude_profile,
+              reset_phase=True,
+          )
+
+          replay_a.step(
+              40
+          )
+
+          replay_b.step(
+              40
+          )
+
+          np.testing.assert_array_equal(
+              replay_a.theta,
+              replay_b.theta,
+          )
+
+          np.testing.assert_array_equal(
+              replay_a.s,
+              replay_b.s,
+          )
+
+          if (
+              replay_a.t
+              != replay_b.t
+          ):
+              raise RuntimeError(
+                  "Deterministic replay "
+                  "time mismatch."
+              )
+
+          try:
+              core.lock(
+                  freq_profile=np.zeros(
+                      num_nodes - 1
+                  )
+              )
+
+          except ValueError:
+              pass
+
+          else:
+              raise RuntimeError(
+                  "Invalid profile size "
+                  "was not rejected."
+              )
+
+          print(
+              "RPU behavioral validation: PASS"
+          )
+          PY
+
+      - name: Generate deterministic Bloch trajectory set
+        run: |
+          rm -rf rpu_core/twa_demo/logs
+
+          python rpu_core/twa_demo/run_twa_demo.py \
+            --periods 4 \
+            --dt 0.005 \
+            --stamp compatibility
+
+      - name: Validate Bloch CSV artifacts
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+
+          import numpy as np
+
+
+          logs_dir = Path(
+              "rpu_core/twa_demo/logs"
+          )
+
+          files = sorted(
+              logs_dir.glob(
+                  "*.csv"
+              )
+          )
+
+          if len(files) != 4:
+              raise RuntimeError(
+                  f"Expected 4 Bloch trajectory "
+                  f"CSV files, got {len(files)}."
+              )
+
+          required_columns = (
+              "t",
+              "sx",
+              "sy",
+              "sz",
+          )
+
+          for file_path in files:
+              with file_path.open(
+                  "r",
+                  encoding="utf-8",
+                  newline="",
+              ) as handle:
+                  reader = csv.DictReader(
+                      handle
+                  )
+
+                  if (
+                      tuple(
+                          reader.fieldnames
+                          or ()
+                      )
+                      != required_columns
+                  ):
+                      raise RuntimeError(
+                          f"Unexpected CSV header "
+                          f"in {file_path}: "
+                          f"{reader.fieldnames}"
+                      )
+
+                  rows = [
+                      [
+                          float(
+                              row[
+                                  column
+                              ]
+                          )
+                          for column
+                          in required_columns
+                      ]
+                      for row
+                      in reader
+                  ]
+
+              data = np.asarray(
+                  rows,
+                  dtype=float,
+              )
+
+              if (
+                  data.ndim != 2
+                  or data.shape[1] != 4
+                  or data.shape[0] < 2
+              ):
+                  raise RuntimeError(
+                      f"Invalid trajectory shape "
+                      f"in {file_path}: "
+                      f"{data.shape}"
+                  )
+
+              if not np.all(
+                  np.isfinite(
+                      data
+                  )
+              ):
+                  raise RuntimeError(
+                      f"Non-finite values detected "
+                      f"in {file_path}."
+                  )
+
+              if not np.all(
+                  np.diff(
+                      data[
+                          :,
+                          0,
+                      ]
+                  )
+                  > 0.0
+              ):
+                  raise RuntimeError(
+                      f"Time is not strictly "
+                      f"increasing in {file_path}."
+                  )
+
+          print(
+              "Bloch CSV artifact validation: PASS"
+          )
+          PY
+
+      - name: Render validated Bloch plot
+        run: |
+          python plot_twa_results.py --no-show
+
+      - name: Validate PNG artifact
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+
+          artifact = Path(
+              "rpu_core/twa_demo/logs/"
+              "bloch_twa_results.png"
+          )
+
+          if not artifact.is_file():
+              raise RuntimeError(
+                  "Bloch PNG artifact "
+                  "was not created."
+              )
+
+          if artifact.stat().st_size <= 0:
+              raise RuntimeError(
+                  "Bloch PNG artifact is empty."
+              )
+
+          png_signature = (
+              b"\x89PNG\r\n\x1a\n"
+          )
+
+          if (
+              artifact.read_bytes()[
+                  :8
+              ]
+              != png_signature
+          ):
+              raise RuntimeError(
+                  "Bloch artifact does not contain "
+                  "a valid PNG signature."
+              )
+
+          print(
+              "Bloch PNG artifact validation: PASS"
+          )
+          PY
+
+      - name: Clean generated artifacts
+        run: |
+          rm -rf rpu_core/twa_demo/logs
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report compatibility result
+        run: |
+          echo "Resonance compatibility validation on Python ${{ matrix.python-version }}: PASS"
