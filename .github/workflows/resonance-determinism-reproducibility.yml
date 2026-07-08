@@ -1,0 +1,1175 @@
+name: Resonance Determinism and Reproducibility
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-determinism-reproducibility.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-determinism-reproducibility.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  determinism-reproducibility:
+    name: Validate determinism and reproducibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      MPLBACKEND: Agg
+      PYTHONHASHSEED: "0"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      TZ: UTC
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install reproducibility dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy matplotlib
+          python -m pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q \
+            rpu_core \
+            plot_twa_results.py
+
+      - name: Validate exact seeded RPU replay
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          num_nodes = 64
+
+          x = np.linspace(
+              0.0,
+              2.0 * np.pi,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              2.0
+              * np.pi
+              * (
+                  1.0
+                  + 0.18
+                  * np.sin(
+                      3.0 * x
+                  )
+                  + 0.07
+                  * np.cos(
+                      9.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.15
+              + 0.45
+              * (
+                  0.5
+                  + 0.5
+                  * np.sin(
+                      5.0 * x
+                      + 0.3
+                  )
+              )
+          )
+
+          imprint_pattern = (
+              np.sin(
+                  4.0 * x
+              )
+              + 0.35
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+
+          def build():
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.004,
+                  sigma=0.02,
+                  k_global=0.65,
+                  ternary=True,
+                  anti_R=0.96,
+                  anti_duration=120,
+                  wq_thresh=0.30,
+              )
+
+              core.imprint(
+                  imprint_pattern,
+                  gain=0.25,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              return core
+
+
+          first = build()
+          second = build()
+
+          first.step(
+              600,
+              stability_guard=True,
+          )
+
+          second.step(
+              600,
+              stability_guard=True,
+          )
+
+          array_attributes = (
+              "omega",
+              "theta",
+              "W",
+              "Wq",
+              "ext_freq",
+              "ext_amp",
+              "ext_phase",
+              "s",
+          )
+
+          for attribute in array_attributes:
+              np.testing.assert_array_equal(
+                  getattr(
+                      first,
+                      attribute,
+                  ),
+                  getattr(
+                      second,
+                      attribute,
+                  ),
+                  err_msg=(
+                      "Seeded replay mismatch in "
+                      f"{attribute}"
+                  ),
+              )
+
+          scalar_attributes = (
+              "t",
+              "dt",
+              "_antilock_timer",
+              "_amp_scale_dyn",
+          )
+
+          for attribute in scalar_attributes:
+              first_value = getattr(
+                  first,
+                  attribute,
+              )
+
+              second_value = getattr(
+                  second,
+                  attribute,
+              )
+
+              if first_value != second_value:
+                  raise RuntimeError(
+                      "Seeded replay mismatch in "
+                      f"{attribute}: "
+                      f"{first_value} != "
+                      f"{second_value}"
+                  )
+
+          first_order = first.measure(
+              "order"
+          )
+
+          second_order = second.measure(
+              "order"
+          )
+
+          if first_order != second_order:
+              raise RuntimeError(
+                  "Seeded replay produced "
+                  "different order measurements."
+              )
+
+          first_ternary = first.measure(
+              "ternary"
+          )
+
+          second_ternary = second.measure(
+              "ternary"
+          )
+
+          np.testing.assert_array_equal(
+              first_ternary[
+                  "s"
+              ],
+              second_ternary[
+                  "s"
+              ],
+          )
+
+          if (
+              first_ternary[
+                  "Wq_nnz"
+              ]
+              != second_ternary[
+                  "Wq_nnz"
+              ]
+          ):
+              raise RuntimeError(
+                  "Seeded replay produced "
+                  "different ternary "
+                  "weight counts."
+              )
+
+          print(
+              f"R={first_order['R']:.12f}, "
+              f"phi={first_order['phi']:.12f}, "
+              f"t={first.t:.12f}"
+          )
+
+          print(
+              "Exact seeded RPU replay "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate RPU chunk-boundary invariance
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          num_nodes = 48
+
+          x = np.linspace(
+              0.0,
+              2.0 * np.pi,
+              num_nodes,
+              endpoint=False,
+          )
+
+          frequency_profile = (
+              2.0
+              * np.pi
+              * (
+                  1.0
+                  + 0.22
+                  * np.sin(
+                      2.0 * x
+                  )
+              )
+          )
+
+          amplitude_profile = (
+              0.20
+              + 0.30
+              * (
+                  0.5
+                  + 0.5
+                  * np.cos(
+                      7.0 * x
+                  )
+              )
+          )
+
+
+          def build():
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.003,
+                  sigma=0.025,
+                  k_global=0.60,
+                  ternary=True,
+                  anti_R=0.95,
+                  anti_duration=80,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              return core
+
+
+          continuous = build()
+          chunked = build()
+
+          continuous.step(
+              800,
+              stability_guard=True,
+          )
+
+          for _ in range(
+              16
+          ):
+              chunked.step(
+                  50,
+                  stability_guard=True,
+              )
+
+          array_attributes = (
+              "theta",
+              "ext_phase",
+              "s",
+          )
+
+          for attribute in array_attributes:
+              np.testing.assert_array_equal(
+                  getattr(
+                      continuous,
+                      attribute,
+                  ),
+                  getattr(
+                      chunked,
+                      attribute,
+                  ),
+                  err_msg=(
+                      "Chunk-boundary mismatch in "
+                      f"{attribute}"
+                  ),
+              )
+
+          scalar_attributes = (
+              "t",
+              "dt",
+              "_antilock_timer",
+              "_amp_scale_dyn",
+          )
+
+          for attribute in scalar_attributes:
+              continuous_value = getattr(
+                  continuous,
+                  attribute,
+              )
+
+              chunked_value = getattr(
+                  chunked,
+                  attribute,
+              )
+
+              if (
+                  continuous_value
+                  != chunked_value
+              ):
+                  raise RuntimeError(
+                      "Chunk-boundary mismatch in "
+                      f"{attribute}: "
+                      f"{continuous_value} != "
+                      f"{chunked_value}"
+                  )
+
+          if (
+              continuous.measure(
+                  "order"
+              )
+              != chunked.measure(
+                  "order"
+              )
+          ):
+              raise RuntimeError(
+                  "Chunked execution changed "
+                  "the final order measurement."
+              )
+
+          print(
+              "RPU chunk-boundary invariance "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate deterministic seed separation
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          num_nodes = 48
+
+          frequency_profile = (
+              2.0
+              * np.pi
+              * np.linspace(
+                  0.8,
+                  1.2,
+                  num_nodes,
+              )
+          )
+
+          amplitude_profile = np.linspace(
+              0.1,
+              0.6,
+              num_nodes,
+          )
+
+
+          def run_seed(
+              seed,
+          ):
+              core = RPUCore(
+                  num_nodes,
+                  seed=seed,
+                  dt=0.004,
+                  sigma=0.02,
+                  ternary=True,
+                  anti_R=2.0,
+              )
+
+              core.lock(
+                  freq_profile=(
+                      frequency_profile
+                  ),
+                  amp_profile=(
+                      amplitude_profile
+                  ),
+                  reset_phase=True,
+              )
+
+              core.step(
+                  300,
+                  stability_guard=False,
+              )
+
+              return core
+
+
+          seed_76_a = run_seed(
+              76
+          )
+
+          seed_76_b = run_seed(
+              76
+          )
+
+          seed_77 = run_seed(
+              77
+          )
+
+          np.testing.assert_array_equal(
+              seed_76_a.theta,
+              seed_76_b.theta,
+          )
+
+          np.testing.assert_array_equal(
+              seed_76_a.s,
+              seed_76_b.s,
+          )
+
+          if np.array_equal(
+              seed_76_a.theta,
+              seed_77.theta,
+          ):
+              raise RuntimeError(
+                  "Different seeds produced "
+                  "identical RPU phase states."
+              )
+
+          if np.array_equal(
+              seed_76_a.W,
+              seed_77.W,
+          ):
+              raise RuntimeError(
+                  "Different seeds produced "
+                  "identical coupling matrices."
+              )
+
+          phase_separation = float(
+              np.linalg.norm(
+                  np.exp(
+                      1j
+                      * seed_76_a.theta
+                  )
+                  - np.exp(
+                      1j
+                      * seed_77.theta
+                  )
+              )
+          )
+
+          if (
+              not np.isfinite(
+                  phase_separation
+              )
+              or phase_separation
+              <= 0.0
+          ):
+              raise RuntimeError(
+                  "Invalid deterministic "
+                  "seed separation."
+              )
+
+          print(
+              f"seed phase separation="
+              f"{phase_separation:.12e}"
+          )
+
+          print(
+              "Deterministic seed separation "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate cross-process RPU reproducibility
+        run: |
+          OUTPUT_A="${RUNNER_TEMP}/rpu_process_a.txt"
+          OUTPUT_B="${RUNNER_TEMP}/rpu_process_b.txt"
+
+          PYTHONHASHSEED=1 \
+          OPENBLAS_NUM_THREADS=1 \
+          OMP_NUM_THREADS=1 \
+          MKL_NUM_THREADS=1 \
+          python rpu_core/rpu_core_v1.py \
+            --N 48 \
+            --steps 240 \
+            --log-every 40 \
+            --seed 76 \
+            --sigma 0.02 \
+            --amp 0.5 \
+            > "${OUTPUT_A}"
+
+          PYTHONHASHSEED=777 \
+          OPENBLAS_NUM_THREADS=1 \
+          OMP_NUM_THREADS=1 \
+          MKL_NUM_THREADS=1 \
+          python rpu_core/rpu_core_v1.py \
+            --N 48 \
+            --steps 240 \
+            --log-every 40 \
+            --seed 76 \
+            --sigma 0.02 \
+            --amp 0.5 \
+            > "${OUTPUT_B}"
+
+          if ! cmp -s "${OUTPUT_A}" "${OUTPUT_B}"; then
+            echo "Independent RPU processes produced different output."
+            diff -u "${OUTPUT_A}" "${OUTPUT_B}" || true
+            exit 1
+          fi
+
+          sha256sum \
+            "${OUTPUT_A}" \
+            "${OUTPUT_B}"
+
+          echo "Cross-process RPU reproducibility validation: PASS"
+
+      - name: Validate deterministic Bloch generation order
+        run: |
+          python - <<'PY'
+          import hashlib
+          import tempfile
+          from pathlib import Path
+
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              generate_trajectories,
+          )
+
+
+          ratios_forward = (
+              0.1,
+              0.2,
+              0.5,
+              1.0,
+          )
+
+          ratios_reverse = tuple(
+              reversed(
+                  ratios_forward
+              )
+          )
+
+          initial_state = np.array(
+              [
+                  0.15,
+                  -0.05,
+                  -0.95,
+              ],
+              dtype=float,
+          )
+
+
+          def digest(
+              path,
+          ):
+              return hashlib.sha256(
+                  Path(
+                      path
+                  ).read_bytes()
+              ).hexdigest()
+
+
+          with tempfile.TemporaryDirectory() as tmp:
+              root = Path(
+                  tmp
+              )
+
+              first_directory = (
+                  root
+                  / "first"
+              )
+
+              second_directory = (
+                  root
+                  / "second"
+              )
+
+              first_results = (
+                  generate_trajectories(
+                      Omega=1.0,
+                      gamma_ratios=(
+                          ratios_forward
+                      ),
+                      delta=0.25,
+                      periods=10.0,
+                      dt=0.005,
+                      s0=initial_state,
+                      output_dir=(
+                          first_directory
+                      ),
+                      stamp="reproducible",
+                  )
+              )
+
+              second_results = (
+                  generate_trajectories(
+                      Omega=1.0,
+                      gamma_ratios=(
+                          ratios_reverse
+                      ),
+                      delta=0.25,
+                      periods=10.0,
+                      dt=0.005,
+                      s0=initial_state,
+                      output_dir=(
+                          second_directory
+                      ),
+                      stamp="reproducible",
+                  )
+              )
+
+              first_files = {
+                  path.name: path
+                  for path
+                  in first_directory.glob(
+                      "*.csv"
+                  )
+              }
+
+              second_files = {
+                  path.name: path
+                  for path
+                  in second_directory.glob(
+                      "*.csv"
+                  )
+              }
+
+              if (
+                  set(
+                      first_files
+                  )
+                  != set(
+                      second_files
+                  )
+              ):
+                  raise RuntimeError(
+                      "Generation order changed "
+                      "the Bloch artifact set."
+                  )
+
+              for filename in sorted(
+                  first_files
+              ):
+                  first_digest = digest(
+                      first_files[
+                          filename
+                      ]
+                  )
+
+                  second_digest = digest(
+                      second_files[
+                          filename
+                      ]
+                  )
+
+                  if (
+                      first_digest
+                      != second_digest
+                  ):
+                      raise RuntimeError(
+                          "Generation order changed "
+                          "Bloch CSV content: "
+                          f"{filename}"
+                      )
+
+                  print(
+                      f"{filename}: "
+                      f"{first_digest}"
+                  )
+
+              first_by_ratio = {
+                  float(
+                      result[
+                          "gamma_ratio"
+                      ]
+                  ): result
+                  for result
+                  in first_results
+              }
+
+              second_by_ratio = {
+                  float(
+                      result[
+                          "gamma_ratio"
+                      ]
+                  ): result
+                  for result
+                  in second_results
+              }
+
+              for ratio in (
+                  ratios_forward
+              ):
+                  first_result = (
+                      first_by_ratio[
+                          ratio
+                      ]
+                  )
+
+                  second_result = (
+                      second_by_ratio[
+                          ratio
+                      ]
+                  )
+
+                  np.testing.assert_array_equal(
+                      first_result[
+                          "final_state"
+                      ],
+                      second_result[
+                          "final_state"
+                      ],
+                  )
+
+                  np.testing.assert_array_equal(
+                      first_result[
+                          "stationary_state"
+                      ],
+                      second_result[
+                          "stationary_state"
+                      ],
+                  )
+
+                  if (
+                      first_result[
+                          "stationary_error_l2"
+                      ]
+                      != second_result[
+                          "stationary_error_l2"
+                      ]
+                  ):
+                      raise RuntimeError(
+                          "Generation order changed "
+                          "the stationary-state "
+                          f"error for ratio {ratio}."
+                      )
+
+                  if (
+                      first_result[
+                          "rows"
+                      ]
+                      != second_result[
+                          "rows"
+                      ]
+                  ):
+                      raise RuntimeError(
+                          "Generation order changed "
+                          "the row count for "
+                          f"ratio {ratio}."
+                      )
+
+          print(
+              "Deterministic Bloch generation-order "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate cross-process Bloch reproducibility
+        run: |
+          export BLOCH_DIR_A="${RUNNER_TEMP}/bloch_process_a"
+          export BLOCH_DIR_B="${RUNNER_TEMP}/bloch_process_b"
+
+          rm -rf \
+            "${BLOCH_DIR_A}" \
+            "${BLOCH_DIR_B}"
+
+          PYTHONHASHSEED=11 \
+          OPENBLAS_NUM_THREADS=1 \
+          OMP_NUM_THREADS=1 \
+          MKL_NUM_THREADS=1 \
+          python rpu_core/twa_demo/run_twa_demo.py \
+            --gamma-ratios 0.1,0.2,0.5,1.0 \
+            --delta 0.25 \
+            --periods 8 \
+            --dt 0.005 \
+            --initial-sx 0.15 \
+            --initial-sy -0.05 \
+            --initial-sz -0.95 \
+            --output-dir "${BLOCH_DIR_A}" \
+            --stamp reproducible \
+            > "${RUNNER_TEMP}/bloch_process_a.log"
+
+          PYTHONHASHSEED=999 \
+          OPENBLAS_NUM_THREADS=1 \
+          OMP_NUM_THREADS=1 \
+          MKL_NUM_THREADS=1 \
+          python rpu_core/twa_demo/run_twa_demo.py \
+            --gamma-ratios 0.1,0.2,0.5,1.0 \
+            --delta 0.25 \
+            --periods 8 \
+            --dt 0.005 \
+            --initial-sx 0.15 \
+            --initial-sy -0.05 \
+            --initial-sz -0.95 \
+            --output-dir "${BLOCH_DIR_B}" \
+            --stamp reproducible \
+            > "${RUNNER_TEMP}/bloch_process_b.log"
+
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+
+          first_directory = Path(
+              os.environ[
+                  "BLOCH_DIR_A"
+              ]
+          )
+
+          second_directory = Path(
+              os.environ[
+                  "BLOCH_DIR_B"
+              ]
+          )
+
+
+          def file_map(
+              directory,
+          ):
+              return {
+                  path.name: path
+                  for path
+                  in directory.glob(
+                      "*.csv"
+                  )
+              }
+
+
+          def digest(
+              path,
+          ):
+              return hashlib.sha256(
+                  path.read_bytes()
+              ).hexdigest()
+
+
+          first_files = file_map(
+              first_directory
+          )
+
+          second_files = file_map(
+              second_directory
+          )
+
+          if len(
+              first_files
+          ) != 4:
+              raise RuntimeError(
+                  "First independent process "
+                  "did not generate four CSV files."
+              )
+
+          if len(
+              second_files
+          ) != 4:
+              raise RuntimeError(
+                  "Second independent process "
+                  "did not generate four CSV files."
+              )
+
+          if (
+              set(
+                  first_files
+              )
+              != set(
+                  second_files
+              )
+          ):
+              raise RuntimeError(
+                  "Independent processes produced "
+                  "different Bloch artifact sets."
+              )
+
+          for filename in sorted(
+              first_files
+          ):
+              first_digest = digest(
+                  first_files[
+                      filename
+                  ]
+              )
+
+              second_digest = digest(
+                  second_files[
+                      filename
+                  ]
+              )
+
+              if (
+                  first_digest
+                  != second_digest
+              ):
+                  raise RuntimeError(
+                      "Independent processes produced "
+                      "different Bloch CSV bytes: "
+                      f"{filename}"
+                  )
+
+              print(
+                  f"{filename}: "
+                  f"{first_digest}"
+              )
+
+          print(
+              "Cross-process Bloch reproducibility "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Validate deterministic plot raster
+        run: |
+          python - <<'PY'
+          import tempfile
+          from pathlib import Path
+
+          import matplotlib.image as mpimg
+          import numpy as np
+
+          from plot_twa_results import (
+              plot_results,
+          )
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              generate_trajectories,
+          )
+
+
+          initial_state = np.array(
+              [
+                  0.15,
+                  -0.05,
+                  -0.95,
+              ],
+              dtype=float,
+          )
+
+          ratios = (
+              0.1,
+              0.2,
+              0.5,
+              1.0,
+          )
+
+          with tempfile.TemporaryDirectory() as tmp:
+              root = Path(
+                  tmp
+              )
+
+              first_directory = (
+                  root
+                  / "first"
+              )
+
+              second_directory = (
+                  root
+                  / "second"
+              )
+
+              generate_trajectories(
+                  Omega=1.0,
+                  gamma_ratios=ratios,
+                  delta=0.25,
+                  periods=6.0,
+                  dt=0.005,
+                  s0=initial_state,
+                  output_dir=(
+                      first_directory
+                  ),
+                  stamp="plot",
+              )
+
+              generate_trajectories(
+                  Omega=1.0,
+                  gamma_ratios=ratios,
+                  delta=0.25,
+                  periods=6.0,
+                  dt=0.005,
+                  s0=initial_state,
+                  output_dir=(
+                      second_directory
+                  ),
+                  stamp="plot",
+              )
+
+              first_plot = (
+                  root
+                  / "plot_a.png"
+              )
+
+              second_plot = (
+                  root
+                  / "plot_b.png"
+              )
+
+              plot_results(
+                  files=sorted(
+                      first_directory.glob(
+                          "*.csv"
+                      )
+                  ),
+                  output_path=(
+                      first_plot
+                  ),
+                  show=False,
+              )
+
+              plot_results(
+                  files=sorted(
+                      second_directory.glob(
+                          "*.csv"
+                      )
+                  ),
+                  output_path=(
+                      second_plot
+                  ),
+                  show=False,
+              )
+
+              first_raster = mpimg.imread(
+                  first_plot
+              )
+
+              second_raster = mpimg.imread(
+                  second_plot
+              )
+
+              if (
+                  first_raster.shape
+                  != second_raster.shape
+              ):
+                  raise RuntimeError(
+                      "Repeated plotting produced "
+                      "different raster dimensions."
+                  )
+
+              if not np.array_equal(
+                  first_raster,
+                  second_raster,
+              ):
+                  maximum_difference = float(
+                      np.max(
+                          np.abs(
+                              first_raster
+                              - second_raster
+                          )
+                      )
+                  )
+
+                  raise RuntimeError(
+                      "Repeated plotting produced "
+                      "different raster content. "
+                      "Maximum difference: "
+                      f"{maximum_difference:.6e}"
+                  )
+
+              if (
+                  first_plot.stat().st_size
+                  <= 0
+                  or second_plot.stat().st_size
+                  <= 0
+              ):
+                  raise RuntimeError(
+                      "Deterministic plot artifact "
+                      "is empty."
+                  )
+
+              print(
+                  f"raster_shape="
+                  f"{first_raster.shape}"
+              )
+
+          print(
+              "Deterministic plot-raster "
+              "validation: PASS"
+          )
+          PY
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during reproducibility validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report reproducibility result
+        run: |
+          echo "Resonance determinism and reproducibility validation: PASS"
