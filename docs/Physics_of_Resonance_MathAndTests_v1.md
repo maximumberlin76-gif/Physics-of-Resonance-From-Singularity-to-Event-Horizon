@@ -1,4 +1,4 @@
-# Mathematical Framework and Experimental Predictions
+# Mathematical and Test Framework
 
 ## Author
 
