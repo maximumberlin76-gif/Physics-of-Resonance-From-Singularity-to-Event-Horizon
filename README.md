@@ -1,5 +1,3 @@
-# Physics of Resonance: From the Singularity Point to the Event Horizon
-
 [![Resonance Core Validation](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-core-validation.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-core-validation.yml)
 [![Python Compatibility](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-python-compatibility.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-python-compatibility.yml)
 [![Numerical Accuracy and Convergence](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-numerical-accuracy-convergence.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-numerical-accuracy-convergence.yml)
@@ -11,6 +9,9 @@
 [![Physical State Admissibility and Domain Bounds](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-physical-state-admissibility-domain-bounds.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-physical-state-admissibility-domain-bounds.yml)
 [![Bifurcation Transition Boundaries and Hysteresis](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-bifurcation-transition-hysteresis.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-bifurcation-transition-hysteresis.yml)
 [![Spectral Stability and Local Dynamics](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-spectral-stability-local-dynamics.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-spectral-stability-local-dynamics.yml)
+
+
+# Physics of Resonance: From the Singularity Point to the Event Horizon
 
 ---
 
