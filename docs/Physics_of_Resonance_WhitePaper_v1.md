@@ -112,25 +112,90 @@ Phase closure alone does not determine dynamical retention. Persistence of the r
 
 In the executable framework, these properties are examined through collective phase coherence, perturbation response, Jacobian reconstruction, and local spectral structure.
 
-Law 2. Minimal Form
+## Law 2. Minimal Form
 
-Statement
+### Statement
 
-The minimally stable carrier is the triangle/tetrahedron; it provides rigidity and completes phase closure.
+The minimal closed carrier is the triangle in two dimensions and the tetrahedron in three dimensions.
 
-Math
+In three dimensions, the tetrahedron is the minimal non-coplanar closed geometry. Its four vertices and six edges provide the smallest framework that can constrain internal deformation while preserving the six global rigid-body modes of translation and rotation.
 
-For a frame stiffness matrix K_frame, minimal 3D rigidity with stability is realized by a tetrahedral cell with no coplanar degeneracy.
+### Geometric Condition
 
-Stability:
+For tetrahedral vertices r₁, r₂, r₃, and r₄, the signed volume is:
+
+V_tet = (1 / 6) det[r₂ − r₁, r₃ − r₁, r₄ − r₁]
+
+A non-degenerate tetrahedral cell requires:
+
+V_tet ≠ 0
+
+If:
+
+V_tet = 0
+
+the four vertices are coplanar and the three-dimensional cell loses its non-coplanar closure.
+
+### Rigidity Condition
+
+For a three-dimensional framework with N vertices, the six global rigid-body modes consist of three translations and three rotations.
+
+After these six modes are removed, local rigidity requires the rigidity matrix R_G to reach:
+
+rank R_G = 3N − 6
+
+For a tetrahedron:
+
+N = 4
+
+therefore:
+
+rank R_G = 6
+
+The tetrahedron has exactly six edges, matching the number of independent constraints required for the minimal generic rigid framework in three dimensions.
+
+### Reduced Stability Condition
+
+The full stiffness matrix contains the six global rigid-body zero modes and therefore should not be tested by the condition:
 
 det K_frame > 0
 
-with minimal volume.
+Instead, stability is evaluated in the reduced deformation subspace after removal of the rigid-body modes.
 
-Consequence
+Let K_red denote the reduced stiffness matrix.
 
-Resonant lattices decompose into tetrahedral cells; spectra of modes depend on the topology of the complex.
+The local stability condition is:
+
+λ_min(K_red) > 0
+
+where λ_min(K_red) is the smallest eigenvalue associated with an internal deformation mode.
+
+This condition means that every non-rigid infinitesimal deformation has a positive restoring stiffness.
+
+### Phase Closure
+
+The geometrical closure of the cell provides a minimal interaction loop through which relative phase relations can be retained and propagated.
+
+For a closed cycle:
+
+Σ_cycle Δφ_ij = 2πn
+
+where n is an integer.
+
+The tetrahedral cell extends this closure into a minimal non-coplanar three-dimensional structure containing multiple coupled triangular cycles.
+
+### Consequence
+
+The tetrahedron is therefore used in this framework as the minimal three-dimensional carrier satisfying:
+
+- non-zero enclosed volume;
+- non-coplanar geometric closure;
+- six independent edge constraints;
+- full generic rank after removal of rigid-body modes;
+- positive reduced internal stiffness;
+- multiple coupled phase-closure cycles.
+
+More complex resonant structures can be represented as coupled assemblies of such cells, whose collective spectra and dynamical responses depend on topology, coupling strength, asymmetry, boundary conditions, and the inheritance of preceding dynamical states.
 
 Law 3. Node Oscillations → Frequencies (Quantization)
 
