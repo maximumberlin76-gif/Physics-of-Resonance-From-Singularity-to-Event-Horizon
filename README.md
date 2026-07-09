@@ -1,4 +1,4 @@
-# Physics of Resonance — From Singularity to Event Horizon
+# Physics of Resonance: From the Singularity Point to the Event Horizon
 
 [![Resonance Core Validation](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-core-validation.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-core-validation.yml)
 [![Python Compatibility](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-python-compatibility.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-python-compatibility.yml)
@@ -375,7 +375,7 @@ Supported Python versions:
 
 Install runtime dependencies:
 
-`python -m pip install numpy matplotlib`
+`python -m pip install -r requirements.txt`
 
 Run the RPU core:
 
@@ -503,6 +503,9 @@ The GitHub Actions qualification ladder validates the computational properties o
 - `docs/Physics_of_Resonance_MathAndTests_v1.md` — mathematical and test framework
 - `CI.md` — continuous integration and qualification index
 - `CITATION.md` — citation formats and attribution guidance
+- `CITATION.cff` — machine-readable citation metadata
+- `requirements.txt` — runtime Python dependencies
+- `LICENSE_DOCUMENTATION` — CC BY 4.0 licensing statement for documentation
 - `rpu_core/__init__.py` — public package API
 - `rpu_core/rpu_core_v1.py` — RPU resonant core
 - `rpu_core/twa_demo/run_twa_demo.py` — deterministic dissipative Bloch trajectory generator
@@ -556,7 +559,9 @@ See `LICENSE_CODE`.
 
 ### Documentation
 
-Creative Commons Attribution 4.0 International, as declared in the project documentation.
+Creative Commons Attribution 4.0 International.
+
+See `LICENSE_DOCUMENTATION`.
 
 ---
 
@@ -572,4 +577,4 @@ Marnov, Maksym. (2026). *Physics of Resonance: From the Singularity Point to the
 
 **POSITRON–ISKORKA Project**
 
-Berlin . 2025 
+Berlin
