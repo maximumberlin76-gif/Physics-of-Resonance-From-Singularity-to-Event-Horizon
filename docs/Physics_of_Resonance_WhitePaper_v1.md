@@ -66,13 +66,13 @@ The resulting framework follows the process sequence:
 
 Fundamental Laws
 
-Law 1. Point-Source (δ)
+## Law 1. Point-Source (δ)
 
-Statement
+### Statement
 
-A point source defines the boundary conditions of the field; stable nodes are stationary solutions under those boundary conditions.
+A localized source defines the boundary conditions of the field. Dynamically retained resonant nodes are stationary or locally persistent solutions compatible with those boundary conditions.
 
-Math
+### Mathematical Form
 
 Let:
 
@@ -82,9 +82,9 @@ with:
 
 J(r) = J₀ δ(r − r₀)
 
-and appropriate boundary conditions.
+and the corresponding boundary conditions.
 
-With Green’s function G such that:
+For a Green’s function G satisfying:
 
 L[G] = δ
 
@@ -92,19 +92,25 @@ the field is:
 
 Ψ = G ∗ J
 
-Stable nodes are extrema of the action S[Ψ] under boundary-condition-preserving variations:
+Stationary nodes correspond to extrema of the action S[Ψ] under variations that preserve the governing boundary conditions:
 
 δS = 0
 
-which yields the Euler–Lagrange equations.
+which yields the corresponding Euler–Lagrange equations.
 
-Phase condition
+### Phase Closure
 
-At the node, phase closure:
+For a closed stationary mode:
 
 Δφ = 2πn
 
-ensures stationarity.
+where n is an integer.
+
+This condition expresses phase closure of the mode under the governing boundary conditions.
+
+Phase closure alone does not determine dynamical retention. Persistence of the resulting state depends on its evolution under coupling, perturbation, dissipation, and local stability.
+
+In the executable framework, these properties are examined through collective phase coherence, perturbation response, Jacobian reconstruction, and local spectral structure.
 
 Law 2. Minimal Form
 
