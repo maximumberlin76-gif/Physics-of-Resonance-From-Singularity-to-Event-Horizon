@@ -197,31 +197,151 @@ The tetrahedron is therefore used in this framework as the minimal three-dimensi
 
 More complex resonant structures can be represented as coupled assemblies of such cells, whose collective spectra and dynamical responses depend on topology, coupling strength, asymmetry, boundary conditions, and the inheritance of preceding dynamical states.
 
-Law 3. Node Oscillations → Frequencies (Quantization)
+## Law 3. Node Oscillations → Frequencies (Quantization)
 
-Statement
+### Statement
 
-Energy is quantized as the frequency of a stable node:
+A dynamically retained node supports characteristic oscillatory modes.
 
-E = h f
+When the governing operator, geometry, and boundary conditions admit only discrete stationary solutions, the corresponding allowed frequencies form a discrete spectrum.
 
-Math
+For an allowed mode:
 
-A stationary node has:
+E_n = h f_n
 
-Ψ(r,t) = ψ(r) e^(−iωt)
+or equivalently:
+
+E_n = ħω_n
 
 with:
 
-ω = 2πf
+ω_n = 2πf_n
 
-The discrete spectrum {ω_n} consists of eigenvalues of the Hermitian operator H:
+The discrete energy value is therefore associated with an allowed stationary mode of the system.
+
+### Stationary Mode
+
+Let:
+
+Ψ_n(r,t) = ψ_n(r) e^(−iω_n t)
+
+where:
+
+- ψ_n(r) is the spatial mode;
+- ω_n is its angular frequency.
+
+For a time-independent Hermitian operator H:
+
+Hψ_n = E_n ψ_n
+
+with:
+
+E_n = ħω_n
+
+Therefore:
 
 Hψ_n = ħω_n ψ_n
 
-Consequence
+The allowed values {E_n} and {ω_n} are determined by the operator together with the governing boundary conditions.
 
-The spectral set {ω_n} is the map of stable nodes.
+### Discrete Spectrum
+
+The spectral problem is:
+
+Hψ_n = E_n ψ_n
+
+subject to the required boundary conditions.
+
+Only solutions compatible with those conditions belong to the admissible spectrum.
+
+The resulting spectral sets are:
+
+{E_n}
+
+{ω_n}
+
+{f_n}
+
+with:
+
+E_n = ħω_n = h f_n
+
+Quantization therefore corresponds to discreteness of the admissible stationary spectrum rather than to arbitrary discretization of continuous motion.
+
+### Phase Closure
+
+For a closed stationary mode:
+
+Δφ_n = 2πn
+
+where n is an integer.
+
+More generally, for a closed propagation path C:
+
+∮_C dφ = 2πn
+
+This condition expresses compatibility of the accumulated phase with closure of the mode.
+
+The phase condition does not by itself determine the spectrum. The allowed mode must simultaneously satisfy:
+
+- the governing dynamical equation;
+- the geometry of the domain;
+- the boundary conditions;
+- the corresponding eigenvalue problem;
+- the phase-closure condition.
+
+### Mode Retention
+
+An admissible eigenmode and a dynamically retained mode are related but not identical concepts.
+
+The eigenvalue problem determines which stationary modes are mathematically allowed.
+
+Dynamic retention determines whether a mode persists under:
+
+- coupling;
+- perturbation;
+- dissipation;
+- external drive;
+- asymmetry;
+- interaction with other modes.
+
+The process is therefore:
+
+**boundary conditions → admissible eigenmodes → characteristic frequencies → phase relations → dynamical retention or decay**
+
+### Collective Extension
+
+For multiple interacting phase-bearing modes, the individual frequencies alone do not determine the collective state.
+
+The collective dynamics also depend on relative phase:
+
+θ_j − θ_i
+
+coupling:
+
+W_ij
+
+asymmetric phase lag:
+
+γ
+
+and external drive.
+
+The transition from an isolated spectral mode to a collective dynamically retained state is therefore governed by both spectral admissibility and coupled phase evolution.
+
+### Consequence
+
+The spectral set:
+
+{ω_n}
+
+defines the characteristic allowed oscillatory modes of the system.
+
+The dynamically realized state depends on which of those modes are excited, how they are coupled, whether their phase relations remain coherent, and whether the resulting state survives perturbation and dissipation.
+
+In this framework, quantization and dynamical retention are therefore connected through the sequence:
+
+**allowed mode → characteristic frequency → phase evolution → collective coherence or decoherence → persistence, transition, or decay**
 
 Law 4. Fractal Scaling
 
