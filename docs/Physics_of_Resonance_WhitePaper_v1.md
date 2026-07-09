@@ -1004,6 +1004,168 @@ The framework therefore interprets rotating-disk structure through the combined 
 
 Persistent spirals, rings, filaments, or clumps are treated as dynamically selected states whose existence depends on the full nonlinear evolution rather than on the instability threshold alone.
 
+## Law 7. Retention Limit (Black Hole)
+
+### Statement
+
+A black-hole horizon is treated in this framework as a limiting geometrical state of retention.
+
+The physical condition is not defined by a critical phase density alone.
+
+It arises when the distribution of mass–energy and the resulting spacetime geometry become sufficiently compact that outward-directed causal trajectories can no longer connect the interior region with distant external observers.
+
+The process is:
+
+**mass–energy concentration → increasing spacetime curvature → narrowing of outward causal escape directions → trapped region → horizon formation**
+
+The phase-retention interpretation is applied only after this geometrical condition is defined.
+
+### Compactness
+
+For a gravitating system of mass `M` contained within a characteristic radius `R`, define the dimensionless compactness parameter:
+
+C = 2GM / Rc²
+
+where:
+
+- `G` is the gravitational constant;
+- `M` is the enclosed gravitating mass;
+- `R` is the characteristic areal radius;
+- `c` is the speed of light.
+
+For a static, spherically symmetric Schwarzschild geometry, the horizon radius is:
+
+r_s = 2GM / c²
+
+and therefore:
+
+C = 1
+
+at:
+
+R = r_s
+
+The relation:
+
+R > r_s
+
+corresponds to a surface outside the Schwarzschild horizon.
+
+The relation:
+
+R = r_s
+
+marks the horizon radius in the Schwarzschild solution.
+
+The condition should not be generalized mechanically to arbitrary rotating, charged, or dynamical spacetimes without using the corresponding geometry.
+
+### Schwarzschild Geometry
+
+Outside a static, spherically symmetric gravitating mass, the metric is:
+
+ds² = −(1 − 2GM / rc²)c²dt² + (1 − 2GM / rc²)^(−1)dr² + r²dΩ²
+
+with:
+
+dΩ² = dθ² + sin²θ dφ²
+
+The horizon occurs at:
+
+r = r_s = 2GM / c²
+
+At this radius, the causal structure changes.
+
+The horizon is not a material surface.
+
+It is a null boundary separating trajectories that can still reach distant external observers from trajectories that cannot.
+
+### Null Expansion and Trapped Surfaces
+
+A more general dynamical description uses congruences of null rays orthogonal to a closed two-dimensional surface.
+
+Let:
+
+θ_+
+
+denote the expansion of the outgoing null congruence, and:
+
+θ_−
+
+the expansion of the ingoing null congruence.
+
+For an ordinary untrapped surface:
+
+θ_+ > 0
+
+and typically:
+
+θ_− < 0
+
+For a trapped surface:
+
+θ_+ < 0
+
+and:
+
+θ_− < 0
+
+Both future-directed null congruences then converge.
+
+A marginally outer trapped surface satisfies:
+
+θ_+ = 0
+
+with:
+
+θ_− < 0
+
+This provides a local geometrical indicator associated with horizon formation in dynamical gravitational systems.
+
+The transition is therefore described by:
+
+**outgoing expansion positive → outgoing expansion decreases → marginal condition → trapped region**
+
+### Retention as Causal Geometry
+
+The defining property of the horizon is not that energy stops moving.
+
+Local physical processes can remain dynamical.
+
+The limiting condition concerns causal accessibility.
+
+Inside the event horizon, future-directed causal trajectories remain directed toward the interior causal future and cannot return information to distant external observers.
+
+The retention sequence is therefore:
+
+**localized energy–momentum → curvature → causal deformation → trapped trajectories**
+
+This is the geometrical meaning of the retention limit used in this framework.
+
+### Energy–Momentum and Collapse
+
+The formation of a trapped region requires a physical spacetime evolution.
+
+The governing relation remains the Einstein field equation:
+
+G_μν + Λg_μν = (8πG / c⁴) T_μν
+
+The geometry therefore evolves in relation to the stress–energy tensor:
+
+T_μν
+
+A collapse process can involve:
+
+- increasing compactness;
+- pressure and stress evolution;
+- radiation;
+- angular momentum;
+- asymmetry;
+- changing causal structure.
+
+The final geometry depends on the complete dynamical path.
+
+Horizon formation is therefore not represented as an instantaneous algebra
+
 Law 8. Emergent Stability (Macroscopic Phase-Lock)
 
 Statement
