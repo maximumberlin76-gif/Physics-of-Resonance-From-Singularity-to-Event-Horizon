@@ -1166,119 +1166,405 @@ The final geometry depends on the complete dynamical path.
 
 Horizon formation is therefore not represented as an instantaneous algebra
 
-Law 8. Emergent Stability (Macroscopic Phase-Lock)
+## Law 8. Emergent Stability (Macroscopic Phase Coherence and Phase-Lock)
 
-Statement
+### Statement
 
-Long-term stability of ensembles arises from large-N phase alignment.
+Macroscopic stability in an open dynamical system is not treated as perfect immobility or permanent uniform alignment.
 
-Math
+It emerges when interactions among many local elements produce a collective state whose defining relations remain dynamically retained under perturbation, dissipation, parameter drift, and internal redistribution.
 
-Kuramoto order parameter:
+The process is:
 
-R(t) = (1/N) |Σ_(k=1)^N e^(iφ_k(t))|
+**local oscillators → relative phase interaction → collective phase coherence or decoherence → perturbation response → dynamic retention, transition, or dispersal**
 
-R → 1 indicates coherence.
+A macroscopic state is therefore dynamically stable when its collective structure persists over time or returns toward an admissible dynamical regime after sufficiently small perturbations.
 
-R → 0 indicates dephasing.
+### Complex Collective Order Parameter
 
-Consequence
+For `N` phase-bearing elements with phases:
 
-Macro-stability requires large-scale high R.
+θ_j(t)
 
-Law of Energy Conservation — Resonant Form
+define the complex collective order parameter:
 
-Meaning
+Z(t) = (1 / N) Σ_(j=1)^N exp[iθ_j(t)]
 
-Energy is the measure of phase coherence; its conservation is the invariance of phase balance across modes and domains.
+The coherence magnitude is:
 
-Local density and flux
+R(t) = |Z(t)|
 
-d/dt ∫_V ρ_E dV = −∮_S J_E · dS
+and the mean collective phase is:
+
+φ(t) = arg Z(t)
+
+Therefore:
+
+Z(t) = R(t) exp[iφ(t)]
 
 with:
 
-ρ_E ∼ φ̇²
+0 ≤ R(t) ≤ 1
 
-J_E ∼ φ̇ ∇φ
+The limiting cases are:
 
-Spectral form
+R(t) → 1
 
-Σ_k E_k = Σ_k h f_k = const
+for strong collective phase coherence, and:
 
-Thermodynamics in phase variables
+R(t) → 0
 
-dU = δQ − δW
+for strong phase dispersion.
 
-corresponds to:
+The value of `R(t)` describes collective phase coherence.
 
-∮ dφ = 2πn
+It does not by itself determine complete dynamical stability.
 
-Entropy:
+### Phase-Lock
 
-S ∝ −Σ_k p_k ln p_k
+For two interacting elements `i` and `j`, define the relative phase:
 
-Entropy growth:
+Δθ_ij(t) = θ_j(t) − θ_i(t)
 
-dS/dt ≥ 0
+A phase-locked relation exists when:
 
-corresponds to dephasing growth.
+|Δθ_ij(t) − Δθ_ij*| ≤ ε
 
-Equilibrium
+over a specified interval of evolution, where:
 
-A phase-stationary state:
+- `Δθ_ij*` is the retained relative phase;
+- `ε` is the admissible phase tolerance.
 
-∂_t φ ≈ const
+Phase-lock therefore refers to a bounded relative-phase relation.
 
-minimizes dissipation.
+It does not require:
 
-The “cold limit” is perfect PL, not absence of motion.
+θ_i = θ_j
 
-Mathematical Minimum
+and it does not require all amplitudes or frequencies to become identical.
 
-E = h f
+For a population of interacting elements, multiple phase-locked clusters can coexist.
 
-ħ = h / 2π
+### Global and Local Coherence
 
-Schrödinger equation:
+A system can contain strong local coherence without complete global coherence.
 
-(ħ² / 2m) ∇²ψ + Uψ = iħ ∂ψ / ∂t
+For a cluster `C_a` containing `N_a` elements, define:
 
-Jeans length:
+Z_a(t) = (1 / N_a) Σ_(j∈C_a) exp[iθ_j(t)]
 
-λ_J = √(πc_s² / Gρ)
+with:
 
-Toomre criterion:
+R_a(t) = |Z_a(t)|
 
-Q = c_s κ / (πGΣ)
+The system can therefore have:
 
-Hill radius:
+R_a → 1
 
-r_H = a(m / 3M)^(1/3)
+inside several local clusters while the global order parameter remains:
 
-Accretion rate:
+R < 1
 
-Ṁ ≈ 3πνΣ
+because the clusters retain different mean phases.
 
-Schwarzschild radius:
+Macroscopic structure can consequently be organized through:
 
-r_s = 2GM / c²
+- global phase coherence;
+- multiple coherent clusters;
+- partially coherent states;
+- metastable transitions between coherent branches.
 
-Black-hole entropy:
+The relevant observable is therefore not a single scalar value alone, but the evolving coherence structure.
 
-S = k_B c³ A / (4Għ)
+### Amplitude-Weighted Coherence
 
-Hawking temperature:
+When the participating modes have unequal amplitudes, define:
 
-T_H = ħc³ / (8πGMk_B)
+Z_A(t) = [Σ_j a_j(t) exp(iθ_j(t))] / Σ_j a_j(t)
 
-ISCO frequency approximation:
+where:
 
-f_ISCO ≈ 2200 Hz × M_☉ / M
+a_j(t) ≥ 0
 
-Unifying Chain — Micro → Macro
+is the amplitude or weight of mode `j`.
 
-δ-source → minimal form → node oscillations (hf) → fractal folding → retention = curvature → instabilities + accretion → horizons → macroscopic PL
+The corresponding weighted coherence magnitude is:
+
+R_A(t) = |Z_A(t)|
+
+with:
+
+0 ≤ R_A(t) ≤ 1
+
+This distinguishes weak phase-bearing modes from dynamically dominant modes.
+
+The unweighted and weighted order parameters therefore measure different aspects of collective structure.
+
+### Coupled Phase Evolution
+
+The executable RPU layer represents continuous phase evolution through:
+
+dθ_i / dt = ω_i + K Σ_j W_ij sin(θ_j − θ_i − γ) + A_i(t) sin(φ_i^ext − θ_i)
+
+where:
+
+- `ω_i` is the intrinsic angular frequency;
+- `K` is the global coupling strength;
+- `W_ij` is the coupling matrix;
+- `γ` is the asymmetric phase lag;
+- `A_i(t)` is the external drive amplitude;
+- `φ_i^ext` is the external drive phase.
+
+The collective state therefore depends on:
+
+**intrinsic frequencies + coupling topology + relative phases + asymmetric phase lag + external drive + modulation + perturbation**
+
+Macroscopic phase coherence is an emergent result of this coupled evolution.
+
+It is not imposed as an initial assumption.
+
+### Dynamic Retention
+
+Let the collective state be represented by:
+
+X(t)
+
+and its evolution by:
+
+dX / dt = F(X, P)
+
+where `P` denotes the governing parameters.
+
+A dynamically retained macroscopic state does not require:
+
+dX / dt = 0
+
+The state may continue to oscillate, rotate, precess, or circulate while preserving its defining collective relations.
+
+Dynamic retention can therefore include:
+
+- stationary states;
+- periodic states;
+- phase-locked states;
+- coherent rotating states;
+- metastable states;
+- bounded attractor-like regimes.
+
+The defining condition is persistence of the relevant dynamical structure.
+
+### Perturbation Response
+
+Let a retained state be:
+
+X*(t)
+
+and introduce a perturbation:
+
+δX(t)
+
+so that:
+
+X(t) = X*(t) + δX(t)
+
+The local perturbation evolution is approximated by:
+
+d(δX) / dt ≈ J(X*) δX
+
+where:
+
+J_ij = ∂F_i / ∂X_j
+
+is the local Jacobian.
+
+The eigenvalues of `J` describe local dynamical directions.
+
+For an eigenvalue:
+
+λ_k = a_k + ib_k
+
+the real part:
+
+Re λ_k = a_k
+
+determines local exponential growth or decay.
+
+If:
+
+Re λ_k < 0
+
+the corresponding local perturbation mode decays.
+
+If:
+
+Re λ_k = 0
+
+the direction is locally neutral.
+
+If:
+
+Re λ_k > 0
+
+the corresponding local perturbation mode grows.
+
+The spectral abscissa is:
+
+α(J) = max_k Re λ_k(J)
+
+This connects macroscopic stability to the local geometry of perturbation evolution.
+
+### Global Phase Neutral Mode
+
+For coupling dynamics that depend only on relative phase differences, a common global phase rotation:
+
+θ_i → θ_i + δ
+
+does not change the internal phase differences.
+
+The coupling-only system therefore possesses a neutral global phase direction.
+
+For the corresponding Jacobian:
+
+J · 1 = 0
+
+where `1` is the vector whose components are all equal to one.
+
+This neutral mode does not represent loss of structural stability.
+
+It represents invariance under a common rotation of the entire phase population.
+
+### Recovery After Perturbation
+
+A dynamically stable state can be tested by applying a controlled perturbation and measuring whether the relevant collective observables return toward the preceding regime.
+
+For a coherence observable:
+
+R(t)
+
+define the deviation from the reference trajectory:
+
+δR(t) = R_perturbed(t) − R_reference(t)
+
+Recovery corresponds to decreasing:
+
+|δR(t)|
+
+over the relevant interval.
+
+The general process is:
+
+**retained state → perturbation → transient deviation → recovery, branch transition, or dispersal**
+
+A perturbation therefore reveals the local and global structure of the dynamical regime.
+
+### Transition Between Macroscopic Regimes
+
+Macroscopic coherence need not change continuously.
+
+Under parameter variation, a system can approach a transition region in which the response changes rapidly.
+
+For a control parameter `α` and collective response `R(α)`, a transition candidate can be associated with:
+
+α* = arg max_α |dR / dα|
+
+The system can then continue into different dynamical branches.
+
+The same current parameter value can produce different responses depending on the preceding path.
+
+This gives:
+
+**collective coherence → perturbation or parameter drift → transition boundary → branch selection → path-dependent macroscopic state**
+
+### Hysteresis
+
+For forward and reverse continuation paths:
+
+R_forward(α)
+
+and:
+
+R_reverse(α)
+
+the branch separation is:
+
+ΔR(α) = |R_forward(α) − R_reverse(α)|
+
+The integrated hysteresis measure is:
+
+H = ∫ ΔR(α) dα
+
+When:
+
+H > 0
+
+the observable macroscopic response depends on the trajectory by which the current parameter value was reached.
+
+The system therefore retains information about its preceding dynamical state.
+
+### Asymmetry and Emergence
+
+Exact symmetry does not by itself explain the selection of one observable trajectory over another.
+
+Macroscopic structural development requires asymmetry in at least one component of the evolving system.
+
+Possible sources include:
+
+- asymmetric phase lag;
+- unequal coupling strengths;
+- nonuniform intrinsic frequencies;
+- spatial gradients;
+- perturbations;
+- dissipation;
+- boundary-condition differences;
+- unequal initial states.
+
+The process is:
+
+**asymmetry → differentiated local response → collective trajectory → branch selection → dynamically retained macroscopic structure**
+
+Asymmetry therefore provides the direction through which a collective state develops.
+
+### Macroscopic Stability Criterion
+
+A high coherence value alone is insufficient to establish macroscopic stability.
+
+A dynamically stable collective regime requires the combined examination of:
+
+- phase coherence;
+- bounded state evolution;
+- response to perturbation;
+- recovery or persistence;
+- admissible state-domain closure;
+- transition structure;
+- local Jacobian;
+- local spectral structure.
+
+The operational sequence is:
+
+**measure coherence → perturb the state → follow the trajectory → test recovery or transition → examine local spectrum**
+
+This is the basis of the executable qualification framework.
+
+### Consequence
+
+Macroscopic stability is interpreted as an emergent dynamical property of interacting elements.
+
+The relation is not:
+
+**large N → automatic stability**
+
+and it is not:
+
+**R → 1 → complete stability**
+
+The framework instead uses:
+
+**coupled interaction → collective phase coherence → perturbation response → local spectral structure → dynamic retention or transition**
+
+A macroscopic state is dynamically retained when its defining collective relations persist under the continuing action of interaction, asymmetry, dissipation, and perturbation.
+
+The complete sequence is:
+
+**local phase-bearing elements → coupled evolution → collective coherence → macroscopic state → perturbation → recovery, branch transition, or dispersal → inherited next state**
 
 Quantum Mechanics via Resonance
 
