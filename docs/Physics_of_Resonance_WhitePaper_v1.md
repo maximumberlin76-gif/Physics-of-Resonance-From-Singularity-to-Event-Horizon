@@ -709,55 +709,300 @@ In the full relativistic description, it is governed by the Einstein field equat
 
 The framework therefore uses the term retention as a dynamical bridge between the persistence of localized states and the geometrical response associated with their physical energy–momentum content.
 
-Law 6. Disk Instability and Accretion
+## Law 6. Disk Instability and Accretion
 
-Statement
+### Statement
 
-Rotating disks exhibit standing modes — spirals and rings — that structure matter.
+Rotating self-gravitating disks support coupled density, velocity, and gravitational perturbation modes.
 
-Math
+When the restoring effects of pressure and rotation are insufficient to counter self-gravity, small perturbations can grow.
 
-Toomre’s criterion:
+The resulting evolution is not determined by instability alone.
+
+The nonlinear outcome depends on:
+
+- the initial perturbation spectrum;
+- local density;
+- sound speed or velocity dispersion;
+- differential rotation;
+- dissipation;
+- angular-momentum transport;
+- coupling between growing modes;
+- boundary conditions;
+- preceding dynamical state.
+
+The process is therefore:
+
+**perturbation → mode growth or decay → nonlinear interaction → angular-momentum redistribution → branch selection → dynamically retained structure or dispersal**
+
+### Local Dispersion Relation
+
+For a local axisymmetric perturbation in a thin rotating disk, the standard dispersion relation is:
+
+ω² = κ² − 2πGΣ|k| + c_s²k²
+
+where:
+
+- `ω` is the perturbation frequency;
+- `κ` is the epicyclic frequency;
+- `G` is the gravitational constant;
+- `Σ` is the surface density;
+- `k` is the radial wavenumber;
+- `c_s` is the effective sound speed or velocity-dispersion scale.
+
+The three terms represent competing dynamical contributions:
+
+`κ²` — rotational stabilization
+
+`−2πGΣ|k|` — self-gravitating amplification
+
+`c_s²k²` — pressure or velocity-dispersion stabilization
+
+When:
+
+ω² > 0
+
+the corresponding local linear mode is oscillatory.
+
+When:
+
+ω² < 0
+
+the frequency becomes imaginary and the perturbation grows or decays exponentially.
+
+Writing:
+
+ω = iΓ
+
+for an unstable mode gives:
+
+Γ² = −ω²
+
+where `Γ > 0` is the linear growth rate.
+
+### Toomre Stability Parameter
+
+The local axisymmetric stability parameter is:
 
 Q = c_s κ / (πGΣ)
 
-Linear dispersion:
+For the standard fluid-disk form:
 
-ω² = κ² − 2πGΣ|k| + c_s²k²
+Q > 1
+
+corresponds to local stability against axisymmetric self-gravitating perturbations.
+
+The threshold:
+
+Q ≈ 1
+
+marks the boundary between the locally stable and unstable regimes.
 
 When:
 
 Q < 1
 
-growing modes develop; planetesimals form as phase-locked condensations.
+a band of wavenumbers can satisfy:
 
-Consequence
+ω² < 0
 
-Filaments are macroscopic PL regimes.
+and the corresponding perturbations can grow.
 
-Law 7. Retention Limit (Black Hole)
+The criterion identifies the onset of linear instability.
 
-Statement
+It does not by itself determine the final nonlinear structure.
 
-At critical phase density, the node closes, forming an event horizon.
+### Characteristic Unstable Scale
 
-Math
+The competition between self-gravity and pressure selects characteristic unstable wavelengths.
 
-Schwarzschild radius:
+For the dispersion relation:
 
-r_s = 2GM / c²
+ω²(k) = κ² − 2πGΣ|k| + c_s²k²
 
-Entropy:
+the strongest local instability occurs near the wavenumber for which the gravitational and pressure contributions produce the minimum of `ω²(k)`.
 
-S = k_B c³ A / (4Għ)
+For positive `k`:
 
-Hawking temperature:
+dω² / dk = −2πGΣ + 2c_s²k
 
-T_H = ħc³ / (8πGMk_B)
+Setting:
 
-Consequence
+dω² / dk = 0
 
-“Blackness” is a limiting PL where radiation is geometrically suppressed.
+gives the characteristic wavenumber:
+
+k_* = πGΣ / c_s²
+
+with corresponding wavelength:
+
+λ_* = 2π / k_*
+
+Therefore:
+
+λ_* = 2c_s² / GΣ
+
+This scale identifies a characteristic local wavelength of maximum linear susceptibility within the idealized thin-disk model.
+
+### Mode Growth and Structural Development
+
+A growing linear perturbation does not yet constitute a persistent structure.
+
+As its amplitude increases, nonlinear interactions become important.
+
+The evolution can include:
+
+- mode coupling;
+- wave steepening;
+- shock formation;
+- dissipation;
+- fragmentation;
+- angular-momentum exchange;
+- redistribution of mass;
+- formation of spirals, rings, clumps, or other collective structures.
+
+The process is:
+
+**linear instability → amplitude growth → nonlinear interaction → redistribution → dynamically selected structure**
+
+The final state depends on the complete dynamical path.
+
+### Phase Structure of Disk Modes
+
+A perturbation mode can be represented as:
+
+δX(r,φ,t) = A(r,t) exp[i(mφ + kr − ωt)]
+
+where:
+
+- `A(r,t)` is the mode amplitude;
+- `m` is the azimuthal mode number;
+- `k` is the radial wavenumber;
+- `ω` is the mode frequency.
+
+The phase is:
+
+Φ(r,φ,t) = mφ + kr − ωt
+
+Relative phase relations between interacting modes influence whether their contributions reinforce, cancel, transfer energy, or reorganize the resulting pattern.
+
+For two modes:
+
+ΔΦ = Φ_1 − Φ_2
+
+A bounded relative phase can support persistent collective interaction.
+
+A drifting relative phase can produce alternating reinforcement and cancellation.
+
+The relevant dynamical question is therefore not merely whether a mode exists, but whether its amplitude and phase relations persist under interaction and dissipation.
+
+### Collective Phase Coherence
+
+For a set of interacting disk modes, define:
+
+Z_disk(t) = [Σ_j a_j exp(iφ_j)] / Σ_j a_j
+
+where:
+
+- `a_j` is the amplitude of mode `j`;
+- `φ_j` is its phase.
+
+The collective phase coherence magnitude is:
+
+R_disk(t) = |Z_disk(t)|
+
+with:
+
+0 ≤ R_disk(t) ≤ 1
+
+This quantity can be used to describe the degree of collective phase alignment among the selected modes.
+
+High `R_disk` does not by itself prove structural stability.
+
+A dynamically retained pattern also depends on:
+
+- mode amplitudes;
+- growth and damping rates;
+- angular-momentum transport;
+- nonlinear coupling;
+- dissipation;
+- boundary conditions.
+
+### Angular-Momentum Transport and Accretion
+
+Accretion requires redistribution of angular momentum.
+
+For a viscous thin-disk approximation, the mass accretion rate is commonly represented by:
+
+Ṁ ≈ 3πνΣ
+
+where:
+
+- `Ṁ` is the accretion rate;
+- `ν` is the effective kinematic viscosity;
+- `Σ` is the surface density.
+
+The effective transport can arise from several physical mechanisms, including hydrodynamic, gravitational, and magnetohydrodynamic stresses.
+
+The general process is:
+
+**stress or torque → angular-momentum redistribution → inward mass transport and outward angular-momentum transport**
+
+In a mode-based description, coherent or partially coherent structures can participate in this redistribution through gravitational torques and correlated dynamical stresses.
+
+### Asymmetry and Branch Selection
+
+An exactly symmetric perturbation pattern would preserve an idealized balanced evolution.
+
+Observable disk development depends on broken symmetry.
+
+Sources of asymmetry include:
+
+- unequal mode amplitudes;
+- phase lag;
+- differential rotation;
+- spatial density gradients;
+- external perturbations;
+- nonlinear coupling;
+- dissipation.
+
+These asymmetries can produce different continuation paths even under similar current parameters.
+
+The process is:
+
+**instability → asymmetric mode interaction → different trajectories → nonlinear branch selection → path-dependent structure**
+
+This creates a direct connection with the broader framework of transition boundaries and hysteresis.
+
+### Dynamic Retention
+
+A spiral, ring, clump, or other disk structure is dynamically retained only if the evolving interaction continues to support it.
+
+The relevant question is not:
+
+**Did an instability occur?**
+
+but:
+
+**Which structure survives the subsequent coupled evolution?**
+
+The sequence is:
+
+**instability → mode growth → nonlinear interaction → redistribution → coherence or decoherence → retention, transition, or dispersal**
+
+### Consequence
+
+Disk instability provides a mechanism for amplifying perturbations.
+
+Accretion provides a mechanism for mass transport through angular-momentum redistribution.
+
+Coupled phase evolution provides a way to describe the relative timing and collective interaction of the participating modes.
+
+The framework therefore interprets rotating-disk structure through the combined relation:
+
+**self-gravity + rotation + pressure or velocity dispersion + dissipation + asymmetric mode coupling + angular-momentum transport**
+
+Persistent spirals, rings, filaments, or clumps are treated as dynamically selected states whose existence depends on the full nonlinear evolution rather than on the instability threshold alone.
 
 Law 8. Emergent Stability (Macroscopic Phase-Lock)
 
