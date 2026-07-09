@@ -1,3 +1,5 @@
+Physics of Resonance — From Singularity to Event Horizon
+
 [![Resonance Core Validation](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-core-validation.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-core-validation.yml)
 [![Python Compatibility](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-python-compatibility.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-python-compatibility.yml)
 [![Numerical Accuracy and Convergence](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-numerical-accuracy-convergence.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-numerical-accuracy-convergence.yml)
@@ -10,7 +12,13 @@
 [![Bifurcation Transition Boundaries and Hysteresis](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-bifurcation-transition-hysteresis.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-bifurcation-transition-hysteresis.yml)
 [![Spectral Stability and Local Dynamics](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-spectral-stability-local-dynamics.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-spectral-stability-local-dynamics.yml)
 
-Physics of Resonance — From Singularity to Event Horizon
+## Resonance as an Observable Mechanism of Structural Self-Organization
+
+**Physics of Resonance — From Singularity to Event Horizon** presents resonance not as an abstract universal law, but as an effective observable mechanism of structural self-organization of Matter, Space, and Time.
+
+The repository develops this mechanism through coupled phase dynamics, coherence, dissipation, asymmetric interaction, perturbation response, transition boundaries, hysteresis, bifurcation candidates, and local spectral structure.
+
+The theoretical description is connected directly to executable numerical implementations. The repository includes the RPU resonant core, deterministic dissipative Bloch trajectories, analytical and numerical stationary-state analysis, parameter scans, transition-path continuation, and an independent GitHub Actions qualification ladder covering execution, numerical convergence, reproducibility, structural invariants, admissible state domains, perturbation sensitivity, transition boundaries, hysteresis, and local spectral dynamics.
 
 Unified resonance physics: from singularity to event horizon.  
 Explains quantization, gravity, tunneling, and plasma stability via phase-lock coherence.  
