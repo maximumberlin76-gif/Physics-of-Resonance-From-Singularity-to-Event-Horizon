@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it using the metadata below."
+
+title: "Physics of Resonance: From the Singularity Point to the Event Horizon"
+
+type: software
+
+authors:
+  - family-names: "Marnov"
+    given-names: "Maksym"
+
+version: "v1.0"
+
+abstract: >-
+  Physics of Resonance: From the Singularity Point to the Event Horizon
+  presents resonance as an effective observable mechanism of structural
+  self-organization of Matter, Space, and Time. The repository connects
+  theoretical formulation with executable RPU phase dynamics, deterministic
+  dissipative Bloch trajectories, numerical qualification, perturbation
+  analysis, transition and hysteresis diagnostics, state admissibility,
+  Jacobian reconstruction, and local spectral stability.
+
+keywords:
+  - resonance
+  - phase dynamics
+  - phase coherence
+  - structural self-organization
+  - nonlinear dynamics
+  - dissipative systems
+  - balanced ternary
+  - Bloch dynamics
+  - numerical qualification
+  - spectral stability
+
+repository-code: "https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon"
+
+url: "https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon"
