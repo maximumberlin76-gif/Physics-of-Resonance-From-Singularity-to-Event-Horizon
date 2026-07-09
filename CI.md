@@ -589,7 +589,7 @@ The CI layer does not convert a numerical or software test into experimental val
 
 - **Repository:** https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon
 - **GitHub Actions:** https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions
-- **White Paper:** `WHITE_PAPER.md`
+- **White Paper:** `docs/Physics_of_Resonance_WhitePaper_v1.md`
 - **Mathematical and Test Framework:** `docs/Physics_of_Resonance_MathAndTests_v1.md`
 - **Citation:** `CITATION.md`
 
