@@ -14,13 +14,13 @@
 
 ## Resonance as an Observable Mechanism of Structural Self-Organization
 
-**Physics of Resonance — From Singularity to Event Horizon** presents resonance as an effective observable mechanism of structural self-organization of Matter, Space, and Time.
+**Physics of Resonance: From the Singularity Point to the Event Horizon** presents resonance as an effective observable mechanism of structural self-organization of Matter, Space, and Time.
 
 The repository develops this mechanism through coupled phase dynamics, phase coherence and decoherence, dissipation, asymmetric interaction, perturbation response, transition boundaries, path dependence, hysteresis, bifurcation candidates, and local spectral structure.
 
 The theoretical description is connected directly to executable numerical implementations. The repository contains an executable RPU resonant core, a deterministic dissipative Bloch trajectory layer, analytical stationary-state calculation, numerical integration, parameter scans, perturbation analysis, transition-path continuation, Jacobian reconstruction, local spectral analysis, and an eleven-workflow GitHub Actions qualification ladder.
 
-The broader theoretical framework examines resonance-based interpretations of quantization, gravitational retention, tunneling, plasma stability, astrophysical structure, and scale-dependent phase coherence.
+The broader theoretical framework examines explicitly defined phase and resonance observables within physical baseline models of quantization, gravitational retention, tunneling, neutron-star merger dynamics, atmospheric structure, large-scale cosmic flow, void evolution, multiscale human physiology, and phase-controlled plasma engineering.
 
 Part of the **POSITRON–ISKORKA Project**.
 
@@ -472,17 +472,20 @@ The documents in `docs/` develop the broader resonance framework across multiple
 
 Topics include:
 
-- quantization and stable resonance modes;
-- phase closure and boundary conditions;
-- gravitational retention;
-- thermodynamic redistribution and decoherence;
+- quantization through governing operators, geometry, and boundary conditions;
+- phase closure and admissible mode structure;
+- quantum dynamics, probability current, coherence, and decoherence;
+- energy conservation and open-system balance;
 - disk instability and accretion;
-- event horizons;
-- quantum tunneling;
-- plasma stability;
-- neutron-star mergers;
-- astrophysical structures;
-- large-scale coherence and dephasing.
+- gravitational retention and event horizons;
+- quantum tunneling and resonant transmission;
+- neutron-star merger dynamics;
+- Saturn’s hexagon as persistent polygonal jet dynamics;
+- large-scale velocity-field convergence;
+- cosmological void structure and dephasing hypotheses;
+- the human organism as an open multiscale dynamical contour;
+- phase-controlled low-temperature plasma engineering;
+- experimental, observational, and falsification criteria.
 
 The repository connects these theoretical discussions to executable models of:
 
@@ -495,13 +498,16 @@ The GitHub Actions qualification ladder validates the computational properties o
 ## Repository Structure
 
 - `.github/workflows/` — eleven computational qualification workflows
-- `docs/Physics_of_Resonance_WhitePaper_v1.md` — broader theoretical framework
-- `docs/Physics_of_Resonance_MathAndTests_v1.md` — mathematical formulation and prediction layer
+- `docs/README.md` — documentation index
+- `docs/Physics_of_Resonance_WhitePaper_v1.md` — complete White Paper
+- `docs/Physics_of_Resonance_MathAndTests_v1.md` — mathematical and test framework
+- `CI.md` — continuous integration and qualification index
+- `CITATION.md` — citation formats and attribution guidance
 - `rpu_core/__init__.py` — public package API
 - `rpu_core/rpu_core_v1.py` — RPU resonant core
 - `rpu_core/twa_demo/run_twa_demo.py` — deterministic dissipative Bloch trajectory generator
 - `plot_twa_results.py` — validated trajectory plotting pipeline
-- `LICENSE_CODE` — Apache License 2.0 for code
+- `LICENSE_CODE` — Apache License 2.0 declaration for code
 - `README.md` — repository overview and execution guide
 
 ---
@@ -514,11 +520,29 @@ The GitHub Actions qualification ladder validates the computational properties o
 
 Contains the broader theoretical framework from the singularity point to the event horizon.
 
-### Mathematical Framework and Experimental Predictions
+### Mathematical and Test Framework
 
 `docs/Physics_of_Resonance_MathAndTests_v1.md`
 
-Contains the mathematical formulation and the experimental or observational prediction layer.
+Contains the mathematical formulation, numerical qualification logic, executable-model scope, eleven-workflow mapping, experimental boundary, physical-system test mapping, and falsification criteria.
+
+### Documentation Index
+
+`docs/README.md`
+
+Provides navigation across the primary documentation layer.
+
+### Continuous Integration and Qualification
+
+`CI.md`
+
+Documents the eleven GitHub Actions workflows, their qualification targets, evidence rules, executable scope, and public qualification boundary.
+
+### Citation
+
+`CITATION.md`
+
+Provides the recommended citation, citation metadata, APA and Chicago formats, BibTeX, attribution, and licensing guidance.
 
 ---
 
@@ -538,7 +562,7 @@ Creative Commons Attribution 4.0 International, as declared in the project docum
 
 ## Citation
 
-Marnov, Maksym (Alchimist). (2025). *Physics of Resonance: From Singularity to Event Horizon*. POSITRON–ISKORKA Project, Berlin.
+Marnov, Maksym. (2026). *Physics of Resonance: From the Singularity Point to the Event Horizon* (Version v1.0). POSITRON–ISKORKA Project. https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon
 
 ---
 
@@ -548,4 +572,4 @@ Marnov, Maksym (Alchimist). (2025). *Physics of Resonance: From Singularity to E
 
 **POSITRON–ISKORKA Project**
 
-Berlin
+Berlin . 2025 
