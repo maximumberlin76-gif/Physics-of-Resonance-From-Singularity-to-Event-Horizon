@@ -1,0 +1,1015 @@
+name: Resonance Bifurcation Transition Boundaries and Hysteresis
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-bifurcation-transition-hysteresis.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-bifurcation-transition-hysteresis.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  transition-hysteresis:
+    name: Validate transition boundaries and hysteretic path dependence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONHASHSEED: "0"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+          python -m pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q \
+            rpu_core \
+            plot_twa_results.py
+
+      - name: Validate deterministic transition-boundary extraction
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+          from rpu_core.rpu_core_v1 import TAU
+
+
+          num_nodes = 48
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          profile_a = (
+              1.0
+              + 0.25
+              * np.sin(
+                  3.0 * x
+              )
+              + 0.05
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+          profile_b = (
+              1.0
+              + 0.25
+              * np.sin(
+                  7.0 * x
+                  + 0.4
+              )
+              - 0.05
+              * np.cos(
+                  5.0 * x
+              )
+          )
+
+          imprint_a = (
+              np.sin(
+                  3.0 * x
+              )
+              + 0.20
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+          imprint_b = (
+              np.sin(
+                  7.0 * x
+                  + 0.4
+              )
+              - 0.20
+              * np.cos(
+                  5.0 * x
+              )
+          )
+
+
+          def build_core():
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.004,
+                  sigma=0.0,
+                  k_global=0.75,
+                  ternary=True,
+                  anti_R=2.0,
+                  wq_thresh=0.25,
+              )
+
+              core.imprint(
+                  imprint_a,
+                  gain=0.30,
+              )
+
+              core.imprint(
+                  imprint_b,
+                  gain=0.30,
+              )
+
+              return core
+
+
+          def response_curve(
+              points,
+              amplitude=0.50,
+          ):
+              alphas = np.linspace(
+                  0.0,
+                  1.0,
+                  points,
+              )
+
+              coherence = []
+
+              for alpha in alphas:
+                  core = build_core()
+
+                  mixed_profile = core.mix(
+                      profile_a,
+                      profile_b,
+                      alpha=alpha,
+                  )
+
+                  core.lock(
+                      freq_profile=(
+                          TAU
+                          * mixed_profile
+                      ),
+                      amp_profile=np.full(
+                          num_nodes,
+                          amplitude,
+                      ),
+                      reset_phase=True,
+                  )
+
+                  core.step(
+                      200,
+                      stability_guard=False,
+                  )
+
+                  order = core.measure(
+                      "order"
+                  )
+
+                  coherence.append(
+                      order[
+                          "R"
+                      ]
+                  )
+
+              coherence = np.asarray(
+                  coherence,
+                  dtype=float,
+              )
+
+              gradient = np.abs(
+                  np.gradient(
+                      coherence,
+                      alphas,
+                  )
+              )
+
+              candidate_index = int(
+                  np.argmax(
+                      gradient
+                  )
+              )
+
+              return (
+                  alphas,
+                  coherence,
+                  gradient,
+                  candidate_index,
+              )
+
+
+          (
+              coarse_alpha,
+              coarse_response,
+              coarse_gradient,
+              coarse_index,
+          ) = response_curve(
+              17
+          )
+
+          (
+              fine_alpha,
+              fine_response,
+              fine_gradient,
+              fine_index,
+          ) = response_curve(
+              33
+          )
+
+          if np.ptp(
+              coarse_response
+          ) <= 5.0e-4:
+              raise RuntimeError(
+                  "Coarse RPU response curve "
+                  "did not show sufficient "
+                  "parameter-dependent variation."
+              )
+
+          if np.ptp(
+              fine_response
+          ) <= 5.0e-4:
+              raise RuntimeError(
+                  "Fine RPU response curve "
+                  "did not show sufficient "
+                  "parameter-dependent variation."
+              )
+
+          if coarse_gradient[
+              coarse_index
+          ] <= 5.0e-3:
+              raise RuntimeError(
+                  "Coarse transition candidate "
+                  "gradient was too weak."
+              )
+
+          if fine_gradient[
+              fine_index
+          ] <= 5.0e-3:
+              raise RuntimeError(
+                  "Fine transition candidate "
+                  "gradient was too weak."
+              )
+
+          coarse_candidate = float(
+              coarse_alpha[
+                  coarse_index
+              ]
+          )
+
+          fine_candidate = float(
+              fine_alpha[
+                  fine_index
+              ]
+          )
+
+          coarse_spacing = float(
+              coarse_alpha[
+                  1
+              ]
+              - coarse_alpha[
+                  0
+              ]
+          )
+
+          if abs(
+              coarse_candidate
+              - fine_candidate
+          ) > (
+              coarse_spacing
+              + 1.0e-15
+          ):
+              raise RuntimeError(
+                  "Transition candidate did not "
+                  "remain stable under scan "
+                  "resolution refinement: "
+                  f"coarse={coarse_candidate}, "
+                  f"fine={fine_candidate}"
+              )
+
+          (
+              repeated_alpha,
+              repeated_response,
+              repeated_gradient,
+              repeated_index,
+          ) = response_curve(
+              33
+          )
+
+          np.testing.assert_array_equal(
+              repeated_alpha,
+              fine_alpha,
+          )
+
+          np.testing.assert_array_equal(
+              repeated_response,
+              fine_response,
+          )
+
+          np.testing.assert_array_equal(
+              repeated_gradient,
+              fine_gradient,
+          )
+
+          if repeated_index != fine_index:
+              raise RuntimeError(
+                  "Repeated transition-boundary "
+                  "extraction changed the "
+                  "candidate index."
+              )
+
+          print(
+              f"coarse_candidate="
+              f"{coarse_candidate:.6f}, "
+              f"fine_candidate="
+              f"{fine_candidate:.6f}, "
+              f"fine_peak_gradient="
+              f"{fine_gradient[fine_index]:.12e}"
+          )
+
+          print(
+              "Deterministic transition-boundary "
+              "extraction: PASS"
+          )
+          PY
+
+      - name: Validate transition-boundary stability under small drive perturbations
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+          from rpu_core.rpu_core_v1 import TAU
+
+
+          num_nodes = 48
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          profile_a = (
+              1.0
+              + 0.25
+              * np.sin(
+                  3.0 * x
+              )
+              + 0.05
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+          profile_b = (
+              1.0
+              + 0.25
+              * np.sin(
+                  7.0 * x
+                  + 0.4
+              )
+              - 0.05
+              * np.cos(
+                  5.0 * x
+              )
+          )
+
+          imprint_a = (
+              np.sin(
+                  3.0 * x
+              )
+              + 0.20
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+          imprint_b = (
+              np.sin(
+                  7.0 * x
+                  + 0.4
+              )
+              - 0.20
+              * np.cos(
+                  5.0 * x
+              )
+          )
+
+
+          def candidate_for(
+              amplitude,
+          ):
+              alphas = np.linspace(
+                  0.0,
+                  1.0,
+                  33,
+              )
+
+              response = []
+
+              for alpha in alphas:
+                  core = RPUCore(
+                      num_nodes,
+                      seed=76,
+                      dt=0.004,
+                      sigma=0.0,
+                      k_global=0.75,
+                      ternary=True,
+                      anti_R=2.0,
+                      wq_thresh=0.25,
+                  )
+
+                  core.imprint(
+                      imprint_a,
+                      gain=0.30,
+                  )
+
+                  core.imprint(
+                      imprint_b,
+                      gain=0.30,
+                  )
+
+                  mixed_profile = core.mix(
+                      profile_a,
+                      profile_b,
+                      alpha=alpha,
+                  )
+
+                  core.lock(
+                      freq_profile=(
+                          TAU
+                          * mixed_profile
+                      ),
+                      amp_profile=np.full(
+                          num_nodes,
+                          amplitude,
+                      ),
+                      reset_phase=True,
+                  )
+
+                  core.step(
+                      200,
+                      stability_guard=False,
+                  )
+
+                  response.append(
+                      core.measure(
+                          "order"
+                      )[
+                          "R"
+                      ]
+                  )
+
+              response = np.asarray(
+                  response,
+                  dtype=float,
+              )
+
+              gradient = np.abs(
+                  np.gradient(
+                      response,
+                      alphas,
+                  )
+              )
+
+              index = int(
+                  np.argmax(
+                      gradient
+                  )
+              )
+
+              return (
+                  float(
+                      alphas[
+                          index
+                      ]
+                  ),
+                  float(
+                      gradient[
+                          index
+                      ]
+                  ),
+              )
+
+
+          amplitudes = (
+              0.499,
+              0.500,
+              0.501,
+          )
+
+          candidates = []
+
+          for amplitude in (
+              amplitudes
+          ):
+              (
+                  candidate,
+                  peak_gradient,
+              ) = candidate_for(
+                  amplitude
+              )
+
+              candidates.append(
+                  candidate
+              )
+
+              if peak_gradient <= 5.0e-3:
+                  raise RuntimeError(
+                      "Transition candidate became "
+                      "too weak under a small "
+                      "drive-amplitude perturbation."
+                  )
+
+              print(
+                  f"amplitude={amplitude:.6f}, "
+                  f"candidate={candidate:.6f}, "
+                  f"peak_gradient="
+                  f"{peak_gradient:.12e}"
+              )
+
+          fine_spacing = 1.0 / 32.0
+
+          if (
+              max(
+                  candidates
+              )
+              - min(
+                  candidates
+              )
+          ) > (
+              fine_spacing
+              + 1.0e-15
+          ):
+              raise RuntimeError(
+                  "Transition candidate moved by "
+                  "more than one fine-scan cell "
+                  "under small drive perturbations: "
+                  f"{candidates}"
+              )
+
+          print(
+              "Transition-boundary stability under "
+              "small drive perturbations: PASS"
+          )
+          PY
+
+      - name: Validate deterministic hysteretic branch separation
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+          from rpu_core.rpu_core_v1 import TAU
+
+
+          num_nodes = 48
+
+          x = np.linspace(
+              0.0,
+              TAU,
+              num_nodes,
+              endpoint=False,
+          )
+
+          profile_a = (
+              1.0
+              + 0.25
+              * np.sin(
+                  3.0 * x
+              )
+              + 0.05
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+          profile_b = (
+              1.0
+              + 0.25
+              * np.sin(
+                  7.0 * x
+                  + 0.4
+              )
+              - 0.05
+              * np.cos(
+                  5.0 * x
+              )
+          )
+
+          imprint_a = (
+              np.sin(
+                  3.0 * x
+              )
+              + 0.20
+              * np.cos(
+                  11.0 * x
+              )
+          )
+
+          imprint_b = (
+              np.sin(
+                  7.0 * x
+                  + 0.4
+              )
+              - 0.20
+              * np.cos(
+                  5.0 * x
+              )
+          )
+
+
+          def build_core():
+              core = RPUCore(
+                  num_nodes,
+                  seed=76,
+                  dt=0.004,
+                  sigma=0.0,
+                  k_global=0.75,
+                  ternary=True,
+                  anti_R=2.0,
+                  wq_thresh=0.25,
+              )
+
+              core.imprint(
+                  imprint_a,
+                  gain=0.30,
+              )
+
+              core.imprint(
+                  imprint_b,
+                  gain=0.30,
+              )
+
+              return core
+
+
+          def continuation_sweep(
+              alphas,
+          ):
+              core = build_core()
+
+              coherence = []
+
+              for alpha in alphas:
+                  mixed_profile = core.mix(
+                      profile_a,
+                      profile_b,
+                      alpha=alpha,
+                  )
+
+                  core.lock(
+                      freq_profile=(
+                          TAU
+                          * mixed_profile
+                      ),
+                      amp_profile=np.full(
+                          num_nodes,
+                          0.50,
+                      ),
+                      reset_phase=False,
+                  )
+
+                  core.step(
+                      150,
+                      stability_guard=False,
+                  )
+
+                  order = core.measure(
+                      "order"
+                  )
+
+                  coherence.append(
+                      order[
+                          "R"
+                      ]
+                  )
+
+              return np.asarray(
+                  coherence,
+                  dtype=float,
+              )
+
+
+          alphas = np.linspace(
+              0.0,
+              1.0,
+              21,
+          )
+
+          forward = continuation_sweep(
+              alphas
+          )
+
+          reverse_raw = continuation_sweep(
+              alphas[
+                  ::-1
+              ]
+          )
+
+          reverse = reverse_raw[
+              ::-1
+          ]
+
+          if not np.all(
+              np.isfinite(
+                  forward
+              )
+          ):
+              raise RuntimeError(
+                  "Forward continuation branch "
+                  "contains non-finite values."
+              )
+
+          if not np.all(
+              np.isfinite(
+                  reverse
+              )
+          ):
+              raise RuntimeError(
+                  "Reverse continuation branch "
+                  "contains non-finite values."
+              )
+
+          if not (
+              np.all(
+                  forward
+                  >= 0.0
+              )
+              and np.all(
+                  forward
+                  <= 1.0
+                  + 1.0e-12
+              )
+          ):
+              raise RuntimeError(
+                  "Forward continuation branch "
+                  "left the coherence domain."
+              )
+
+          if not (
+              np.all(
+                  reverse
+                  >= 0.0
+              )
+              and np.all(
+                  reverse
+                  <= 1.0
+                  + 1.0e-12
+              )
+          ):
+              raise RuntimeError(
+                  "Reverse continuation branch "
+                  "left the coherence domain."
+              )
+
+          branch_gap = np.abs(
+              forward
+              - reverse
+          )
+
+          maximum_gap = float(
+              np.max(
+                  branch_gap
+              )
+          )
+
+          hysteresis_area = float(
+              np.sum(
+                  0.5
+                  * (
+                      branch_gap[
+                          1:
+                      ]
+                      + branch_gap[
+                          :-1
+                      ]
+                  )
+                  * np.diff(
+                      alphas
+                  )
+              )
+          )
+
+          if maximum_gap <= 1.0e-2:
+              raise RuntimeError(
+                  "Forward and reverse branches "
+                  "did not show sufficient "
+                  "path-dependent separation: "
+                  f"{maximum_gap:.12e}"
+              )
+
+          if hysteresis_area <= 1.0e-3:
+              raise RuntimeError(
+                  "Integrated branch separation "
+                  "was too small: "
+                  f"{hysteresis_area:.12e}"
+              )
+
+          repeated_forward = (
+              continuation_sweep(
+                  alphas
+              )
+          )
+
+          repeated_reverse = (
+              continuation_sweep(
+                  alphas[
+                      ::-1
+                  ]
+              )[
+                  ::-1
+              ]
+          )
+
+          np.testing.assert_array_equal(
+              repeated_forward,
+              forward,
+          )
+
+          np.testing.assert_array_equal(
+              repeated_reverse,
+              reverse,
+          )
+
+          print(
+              f"maximum_branch_gap="
+              f"{maximum_gap:.12e}, "
+              f"hysteresis_area="
+              f"{hysteresis_area:.12e}"
+          )
+
+          print(
+              "Deterministic hysteretic branch "
+              "separation: PASS"
+          )
+          PY
+
+      - name: Validate Bloch stationary response as a path-independent control
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              steady_state_bloch,
+          )
+
+
+          deltas = np.linspace(
+              -3.0,
+              3.0,
+              61,
+          )
+
+          forward = np.asarray(
+              [
+                  steady_state_bloch(
+                      1.0,
+                      0.2,
+                      float(
+                          delta
+                      ),
+                  )
+                  for delta
+                  in deltas
+              ],
+              dtype=float,
+          )
+
+          reverse_raw = np.asarray(
+              [
+                  steady_state_bloch(
+                      1.0,
+                      0.2,
+                      float(
+                          delta
+                      ),
+                  )
+                  for delta
+                  in deltas[
+                      ::-1
+                  ]
+              ],
+              dtype=float,
+          )
+
+          reverse = reverse_raw[
+              ::-1
+          ]
+
+          np.testing.assert_array_equal(
+              forward,
+              reverse,
+          )
+
+          if not np.all(
+              np.isfinite(
+                  forward
+              )
+          ):
+              raise RuntimeError(
+                  "Bloch stationary control "
+                  "contains non-finite values."
+              )
+
+          radii = np.linalg.norm(
+              forward,
+              axis=1,
+          )
+
+          if np.max(
+              radii
+          ) > (
+              1.0
+              + 1.0e-12
+          ):
+              raise RuntimeError(
+                  "Bloch stationary control "
+                  "left the admissible unit ball."
+              )
+
+          path_gap = np.linalg.norm(
+              forward
+              - reverse,
+              axis=1,
+          )
+
+          maximum_path_gap = float(
+              np.max(
+                  path_gap
+              )
+          )
+
+          if maximum_path_gap != 0.0:
+              raise RuntimeError(
+                  "Path-independent Bloch control "
+                  "showed an unexpected branch gap: "
+                  f"{maximum_path_gap:.12e}"
+              )
+
+          response_variation = float(
+              np.max(
+                  np.linalg.norm(
+                      np.diff(
+                          forward,
+                          axis=0,
+                      ),
+                      axis=1,
+                  )
+              )
+          )
+
+          if response_variation <= 0.0:
+              raise RuntimeError(
+                  "Bloch stationary control did "
+                  "not respond to detuning changes."
+              )
+
+          print(
+              f"maximum_path_gap="
+              f"{maximum_path_gap:.12e}, "
+              f"maximum_local_variation="
+              f"{response_variation:.12e}"
+          )
+
+          print(
+              "Bloch stationary path-independence "
+              "control: PASS"
+          )
+          PY
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during transition and hysteresis validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report transition and hysteresis result
+        run: |
+          echo "Resonance bifurcation-candidate, transition-boundary, and hysteresis validation: PASS"
