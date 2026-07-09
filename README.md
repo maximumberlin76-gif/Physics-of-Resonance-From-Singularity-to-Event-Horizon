@@ -12,6 +12,55 @@
 [![Bifurcation Transition Boundaries and Hysteresis](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-bifurcation-transition-hysteresis.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-bifurcation-transition-hysteresis.yml)
 [![Spectral Stability and Local Dynamics](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-spectral-stability-local-dynamics.yml/badge.svg)](https://github.com/maximumberlin76-gif/Physics-of-Resonance-From-Singularity-to-Event-Horizon/actions/workflows/resonance-spectral-stability-local-dynamics.yml)
 
+---
+
+## Quick Start
+
+### Requirements
+
+Supported Python versions:
+
+- Python 3.10
+- Python 3.11
+- Python 3.12
+
+Install runtime dependencies:
+
+`python -m pip install -r requirements.txt`
+
+Run the RPU core:
+
+`python rpu_core/rpu_core_v1.py`
+
+Run the RPU scan path:
+
+`python rpu_core/rpu_core_v1.py --scan`
+
+Generate dissipative Bloch trajectories:
+
+`python rpu_core/twa_demo/run_twa_demo.py`
+
+Default trajectory ratios:
+
+- `γ / Ω = 0.1`
+- `γ / Ω = 0.2`
+- `γ / Ω = 0.5`
+- `γ / Ω = 1.0`
+
+Default output directory:
+
+`rpu_core/twa_demo/logs/`
+
+Render the Bloch plot:
+
+`python plot_twa_results.py --no-show`
+
+Default plot output:
+
+`rpu_core/twa_demo/logs/bloch_twa_results.png`
+
+---
+
 ## Resonance as an Observable Mechanism of Structural Self-Organization
 
 **Physics of Resonance: From the Singularity Point to the Event Horizon** presents resonance as an effective observable mechanism of structural self-organization of Matter, Space, and Time.
@@ -360,55 +409,6 @@ Provides validated parameter handling, the dissipative Bloch vector field, fixed
 File: `plot_twa_results.py`
 
 Provides CSV trajectory discovery, required-column validation, finite-value validation, strictly increasing time validation, trajectory-set validation, headless plotting, and PNG artifact generation.
-
----
-
-## Quick Start
-
-### Requirements
-
-Supported Python versions:
-
-- Python 3.10
-- Python 3.11
-- Python 3.12
-
-Install runtime dependencies:
-
-`python -m pip install -r requirements.txt`
-
-Run the RPU core:
-
-`python rpu_core/rpu_core_v1.py`
-
-Run the RPU scan path:
-
-`python rpu_core/rpu_core_v1.py --scan`
-
-Generate dissipative Bloch trajectories:
-
-`python rpu_core/twa_demo/run_twa_demo.py`
-
-Default trajectory ratios:
-
-- `γ / Ω = 0.1`
-- `γ / Ω = 0.2`
-- `γ / Ω = 0.5`
-- `γ / Ω = 1.0`
-
-Default output directory:
-
-`rpu_core/twa_demo/logs/`
-
-Render the Bloch plot:
-
-`python plot_twa_results.py --no-show`
-
-Default plot output:
-
-`rpu_core/twa_demo/logs/bloch_twa_results.png`
-
----
 
 ## Computational Qualification Ladder
 
