@@ -16,11 +16,21 @@ Version
 
 v1.0
 
-Abstract
+## Abstract
 
-We propose a resonance–fractal paradigm that unifies micro- and macro-scales through a single mechanism: phase retention. Energy is treated as the coherence of frequency-phase states; gravity is the geometrization of retained energy.
+We present a resonance–fractal framework in which resonance is treated as an effective observable mechanism of structural self-organization of Matter, Space, and Time.
 
-Fundamental laws — quantization, conservation of energy, thermodynamics, and general relativity — are expressed through phase coherence. We provide resonant interpretations of quantum and astrophysical phenomena, including observer and collapse, tunneling as phase matching, neutron-star collisions, Saturn’s hexagon, the Great Attractor, and the Boötes Void, together with an engineering sketch of “cold plasma” via phase synchronization.
+The framework develops a continuous process logic through coupled phase dynamics, phase coherence and decoherence, dissipation, asymmetric interaction, dynamic retention, perturbation response, transition boundaries, branch selection, path dependence, hysteresis, and local spectral structure.
+
+The theoretical layer examines resonance-based interpretations of quantization, gravitational retention, tunneling, plasma stability, astrophysical structure, and scale-dependent phase coherence.
+
+The mathematical layer connects these interpretations to measurable dynamical quantities: the complex collective order parameter, phase coherence magnitude, asymmetric coupled-phase evolution, transition-candidate gradients, forward and reverse continuation branches, hysteresis area, local Jacobians, spectral abscissa, and admissible Bloch-state domains.
+
+The executable layer includes the RPU resonant core and a deterministic dissipative Bloch trajectory model. The computational apparatus is qualified through numerical convergence, reproducibility, structural invariants, perturbation sensitivity, state admissibility, transition-boundary analysis, hysteresis, and local spectral dynamics.
+
+The resulting framework follows the process sequence:
+
+**interaction → relative phase dynamics → phase coherence or decoherence → dynamic retention or dissipation → transition boundary → branch selection → path dependence → inherited next state**
 
 Terms
 
