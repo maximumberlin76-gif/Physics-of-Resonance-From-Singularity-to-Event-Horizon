@@ -20,6 +20,14 @@ The repository develops this mechanism through coupled phase dynamics, coherence
 
 The theoretical description is connected directly to executable numerical implementations. The repository includes the RPU resonant core, deterministic dissipative Bloch trajectories, analytical and numerical stationary-state analysis, parameter scans, transition-path continuation, and an independent GitHub Actions qualification ladder covering execution, numerical convergence, reproducibility, structural invariants, admissible state domains, perturbation sensitivity, transition boundaries, hysteresis, and local spectral dynamics.
 
+## Core Process Logic
+
+The repository treats observable structure as the dynamic result of coupled open-system evolution rather than as a static arrangement.
+
+The process logic is:
+
+**interaction → relative phase dynamics → phase coherence or decoherence → dynamic retention or dissipation → transition boundary
+
 Unified resonance physics: from singularity to event horizon.  
 Explains quantization, gravity, tunneling, and plasma stability via phase-lock coherence.  
 Part of the **POSITRON–ISKORKA Project**.
