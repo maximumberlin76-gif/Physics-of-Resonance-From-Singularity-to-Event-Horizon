@@ -539,35 +539,175 @@ The general sequence is:
 
 **local interaction → dynamically retained structure → inherited state → scale transformation → asymmetric evolution → new dynamically related structure**
 
-Law 5. Retention as Geometry
+## Law 5. Retention as Geometry
 
-Statement
+### Statement
 
-Negative potential energy appears as curvature in general relativity; retention is geometrization of energy.
+In this framework, retention denotes the persistence and localization of a dynamically realized energy–momentum distribution.
 
-Math
+In general relativity, such a distribution is not represented as an external force acting inside a fixed background. It contributes to the geometry of spacetime through the stress–energy tensor.
 
-Newtonian potential energy:
+The mathematical sequence is:
 
-E_p = −GMm / r
+**localized dynamical state → energy–momentum distribution → spacetime curvature → modified trajectories and causal structure**
 
-corresponds, in general relativity, to the Schwarzschild metric with radius:
+The framework interprets this relation as the geometrical expression of dynamically retained energy.
 
-r_s = 2GM / c²
+### Newtonian Weak-Field Limit
 
-The gravitational action:
+For a point mass `M`, the Newtonian gravitational potential is:
 
-E[g_μν] = ∫ (R + Λ) √(−g) d⁴x
+Φ_N(r) = −GM / r
 
-is extremal:
+The potential energy of a test mass `m` is:
 
-δE = 0
+E_p = m Φ_N = −GMm / r
 
-which yields the Einstein equations.
+The gravitational field is:
 
-Consequence
+g = −∇Φ_N
 
-Gravity is the gradient of phase-density of retention.
+and the potential satisfies the Poisson equation:
+
+∇²Φ_N = 4πGρ_m
+
+where `ρ_m` is the mass density.
+
+In the weak-field limit of general relativity, the metric component is approximately:
+
+g_00 ≈ −(1 + 2Φ_N / c²)
+
+The Newtonian potential therefore appears as the weak-field limit of spacetime geometry.
+
+This provides the first mathematical bridge:
+
+**localized mass–energy → gravitational potential → weak-field metric deformation**
+
+### General-Relativistic Form
+
+The Einstein field equations are:
+
+G_μν + Λg_μν = (8πG / c⁴) T_μν
+
+where:
+
+- `G_μν` is the Einstein tensor;
+- `g_μν` is the spacetime metric;
+- `Λ` is the cosmological constant;
+- `T_μν` is the stress–energy tensor.
+
+The source of curvature is therefore not negative potential energy alone.
+
+It is the full local stress–energy content represented by `T_μν`.
+
+The corresponding variational formulation is based on the total action:
+
+S = S_g + S_m
+
+with gravitational part:
+
+S_g = (c³ / 16πG) ∫ (R − 2Λ) √(−g) d⁴x
+
+where:
+
+- `R` is the Ricci scalar;
+- `g` is the determinant of the metric tensor;
+- `S_m` is the matter action.
+
+Variation with respect to the metric gives:
+
+δS / δg_μν = 0
+
+which yields the Einstein field equations.
+
+### Local Energy Density
+
+For an observer with four-velocity `u^μ`, the locally measured energy density is:
+
+ε = T_μν u^μ u^ν
+
+The local dynamical distribution of energy and momentum is constrained by:
+
+∇_μ T^μν = 0
+
+This covariant conservation relation expresses the local continuity of energy–momentum evolution in curved spacetime.
+
+Retention in this framework therefore refers to the persistence of a localized dynamical configuration whose energy–momentum distribution remains sufficiently structured over time.
+
+### Phase Structure and Field Energy
+
+For a complex field written as:
+
+Ψ = A e^(iφ)
+
+where:
+
+- `A` is the amplitude;
+- `φ` is the phase;
+
+the spacetime derivative is:
+
+∂_μΨ = e^(iφ) [∂_μA + iA ∂_μφ]
+
+Therefore:
+
+|∂_μΨ|²
+
+contains contributions from both:
+
+(∂_μA)²
+
+and:
+
+A²(∂_μφ)²
+
+For field theories whose stress–energy tensor depends on derivatives of the field, spatial and temporal phase gradients can therefore contribute to the local energy–momentum distribution.
+
+The mathematical bridge is:
+
+**amplitude and phase structure → field derivatives → stress–energy distribution → spacetime geometry**
+
+This does not mean that phase alone replaces the stress–energy tensor.
+
+The phase structure enters through the dynamics of the underlying field.
+
+### Dynamic Retention
+
+A localized field configuration persists only if its internal dynamics remain compatible with its boundary conditions, interactions, dissipation, and perturbations.
+
+The process is:
+
+**localization → interaction → energy redistribution → coherence or decoherence → persistence, transition, or dispersal**
+
+In the executable phase framework, the corresponding dynamical questions are examined through:
+
+- collective phase coherence;
+- perturbation response;
+- transition candidates;
+- path dependence;
+- hysteresis;
+- local Jacobians;
+- spectral structure.
+
+These computational quantities describe dynamical retention inside the implemented model.
+
+The general-relativistic layer describes how a physical energy–momentum distribution is related to spacetime geometry.
+
+### Consequence
+
+The relation developed in this framework is not:
+
+**negative potential energy = curvature**
+
+but rather:
+
+**dynamically retained physical state → localized energy–momentum distribution → geometrical response of spacetime**
+
+In the weak-field limit, this relation reduces to the Newtonian gravitational potential.
+
+In the full relativistic description, it is governed by the Einstein field equations.
+
+The framework therefore uses the term retention as a dynamical bridge between the persistence of localized states and the geometrical response associated with their physical energy–momentum content.
 
 Law 6. Disk Instability and Accretion
 
