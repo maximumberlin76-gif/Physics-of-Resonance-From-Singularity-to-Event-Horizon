@@ -32,19 +32,37 @@ The resulting framework follows the process sequence:
 
 **interaction → relative phase dynamics → phase coherence or decoherence → dynamic retention or dissipation → transition boundary → branch selection → path dependence → inherited next state**
 
-Terms
+## Terms
 
-Resonant node (quantum): localized, phase-coherent mode of a field that retains energy; a stable standing-wave configuration.
+**Resonant node:** a localized dynamically retained mode whose phase relations remain sufficiently coherent under the governing boundary conditions.
 
-Singularity point (O): minimal reference point where the total phase is aligned; an extremal of the action.
+**Singularity point (O):** the minimal reference point of the framework from which boundary conditions, phase closure, and subsequent structural evolution are defined.
 
-Minimal form: triangle/tetrahedron as the smallest rigid geometry that closes phases in 2D/3D.
+**Minimal form:** the triangle in two dimensions and the tetrahedron in three dimensions as the minimal closed geometries used in this framework. In three dimensions, the tetrahedral cell provides a non-coplanar closed configuration.
 
-Phase-lock (PL): stable coincidence of phases within tolerance Δφ; macroscopic coherence.
+**Phase-lock (PL):** a bounded relative-phase relation maintained within a tolerance `Δφ` over a specified interval of evolution.
 
-Fractal folding: self-similar replication of nodes across scales; scale relations preserved.
+**Phase coherence:** the collective dynamical consistency of phase relations across an interacting population. In the executable layer it is measured through the complex order parameter `Z(t)` and its magnitude `R(t)`.
 
-Retention: negative potential energy manifest as spacetime curvature; “energy stored as geometry.”
+**Decoherence:** loss or dispersion of previously retained phase relations under detuning, dissipation, perturbation, noise, or changing interaction conditions.
+
+**Fractal folding:** scale-dependent recurrence of structural relations, resonance ratios, or phase relations across hierarchical levels.
+
+**Retention:** the persistence of a dynamically coherent state through continued interaction, energy redistribution, and dissipation. In the gravitational sections of this framework, retention is interpreted through the relation between localized energy and spacetime geometry.
+
+**Asymmetric phase lag:** a non-zero phase offset `γ` in the interaction term `θ_j - θ_i - γ`, producing direction-dependent phase response and allowing different dynamical trajectories.
+
+**Transition candidate:** a reproducible region of strongest local change in an observable response curve under controlled parameter variation.
+
+**Branch selection:** entry into one of multiple dynamically distinguishable continuation paths after the system crosses or approaches a transition region.
+
+**Path dependence:** dependence of the current observable state on the trajectory by which the current parameter values were reached.
+
+**Hysteresis:** finite separation between forward and reverse continuation branches over the same parameter interval.
+
+**Local Jacobian:** the matrix of first derivatives of the dynamical vector field around a given state, used to describe the local geometry of perturbation evolution.
+
+**Local spectral structure:** the eigenvalue structure of the local Jacobian, describing locally decaying, neutral, or growing dynamical directions.
 
 Fundamental Laws
 
