@@ -1,0 +1,750 @@
+name: Resonance Spectral Stability and Local Dynamics
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-spectral-stability-local-dynamics.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".github/workflows/resonance-spectral-stability-local-dynamics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  spectral-local-dynamics:
+    name: Validate spectral stability and local dynamics
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONHASHSEED: "0"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+          python -m pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q rpu_core plot_twa_results.py
+
+      - name: Validate Bloch Jacobian and dissipative spectrum
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core.twa_demo.run_twa_demo import (
+              bloch_rhs,
+              steady_state_bloch,
+          )
+
+
+          def analytical_jacobian(Omega, gamma, delta):
+              return np.array(
+                  [
+                      [-0.5 * gamma, delta, 0.0],
+                      [-delta, -0.5 * gamma, Omega],
+                      [0.0, -Omega, -gamma],
+                  ],
+                  dtype=float,
+              )
+
+
+          def numerical_jacobian(function, state, step=1.0e-6):
+              state = np.asarray(state, dtype=float)
+              dimension = state.size
+              jacobian = np.empty((dimension, dimension), dtype=float)
+
+              for column in range(dimension):
+                  direction = np.zeros(dimension, dtype=float)
+                  direction[column] = 1.0
+
+                  jacobian[:, column] = (
+                      function(state + step * direction)
+                      - function(state - step * direction)
+                  ) / (2.0 * step)
+
+              return jacobian
+
+
+          comparison_cases = (
+              (1.0, 0.2, 0.35),
+              (2.0, 0.5, -0.4),
+              (8.0, 3.0, 5.0),
+          )
+
+          maximum_jacobian_error = 0.0
+
+          for Omega, gamma, delta in comparison_cases:
+              stationary = steady_state_bloch(Omega, gamma, delta)
+              analytical = analytical_jacobian(Omega, gamma, delta)
+              numerical = numerical_jacobian(
+                  lambda state: bloch_rhs(
+                      0.0,
+                      state,
+                      Omega,
+                      gamma,
+                      delta,
+                  ),
+                  stationary,
+              )
+
+              error = float(np.max(np.abs(analytical - numerical)))
+              maximum_jacobian_error = max(maximum_jacobian_error, error)
+
+              if error > 5.0e-9:
+                  raise RuntimeError(
+                      "Analytical and numerical Bloch Jacobians disagree: "
+                      f"Omega={Omega}, gamma={gamma}, delta={delta}, "
+                      f"error={error:.6e}"
+                  )
+
+              np.testing.assert_allclose(
+                  np.sort_complex(np.linalg.eigvals(analytical)),
+                  np.sort_complex(np.linalg.eigvals(numerical)),
+                  rtol=0.0,
+                  atol=1.0e-8,
+              )
+
+          spectral_abscissae = []
+          case_count = 0
+
+          for Omega in (0.1, 0.25, 1.0, 4.0, 10.0):
+              for gamma in (0.01, 0.05, 0.2, 1.5, 5.0):
+                  for delta in (-10.0, -3.0, -0.4, 0.0, 0.7, 3.0, 10.0):
+                      jacobian = analytical_jacobian(Omega, gamma, delta)
+                      eigenvalues = np.linalg.eigvals(jacobian)
+
+                      if not np.all(np.isfinite(eigenvalues)):
+                          raise RuntimeError(
+                              "Non-finite Bloch eigenvalue detected."
+                          )
+
+                      spectral_abscissa = float(
+                          np.max(np.real(eigenvalues))
+                      )
+
+                      spectral_abscissae.append(spectral_abscissa)
+
+                      if spectral_abscissa >= 0.0:
+                          raise RuntimeError(
+                              "Dissipative Bloch Jacobian lost local spectral "
+                              "stability: "
+                              f"Omega={Omega}, gamma={gamma}, delta={delta}, "
+                              f"spectral_abscissa={spectral_abscissa:.6e}"
+                          )
+
+                      trace_error = abs(
+                          np.sum(eigenvalues) - np.trace(jacobian)
+                      )
+
+                      if trace_error > 1.0e-10:
+                          raise RuntimeError(
+                              "Bloch spectral trace identity failed: "
+                              f"{trace_error:.6e}"
+                          )
+
+                      if abs(np.trace(jacobian) + 2.0 * gamma) > 1.0e-14:
+                          raise RuntimeError(
+                              "Bloch Jacobian trace does not match the "
+                              "dissipative rate sum."
+                          )
+
+                      case_count += 1
+
+          print(
+              f"jacobian_cases={len(comparison_cases)}, "
+              f"spectral_cases={case_count}, "
+              f"maximum_jacobian_error={maximum_jacobian_error:.12e}, "
+              f"maximum_spectral_abscissa="
+              f"{max(spectral_abscissae):.12e}, "
+              f"minimum_spectral_abscissa="
+              f"{min(spectral_abscissae):.12e}"
+          )
+
+          print(
+              "Bloch Jacobian and dissipative spectral stability: PASS"
+          )
+          PY
+
+      - name: Validate RPU local Jacobian and refinement
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+          from rpu_core.rpu_core_v1 import TAU
+
+
+          def analytical_jacobian(core, theta, external_phase, amplitude):
+              arguments = (
+                  theta[None, :]
+                  - theta[:, None]
+                  - core.gamma
+              )
+
+              cosines = np.cos(arguments)
+              jacobian = core.kg * core.W * cosines
+
+              diagonal = (
+                  -core.kg * np.sum(core.W * cosines, axis=1)
+                  - amplitude * np.cos(external_phase - theta)
+              )
+
+              np.fill_diagonal(jacobian, diagonal)
+              return jacobian
+
+
+          def numerical_jacobian(function, state, step):
+              dimension = state.size
+              jacobian = np.empty((dimension, dimension), dtype=float)
+
+              for column in range(dimension):
+                  direction = np.zeros(dimension, dtype=float)
+                  direction[column] = 1.0
+
+                  jacobian[:, column] = (
+                      function(state + step * direction)
+                      - function(state - step * direction)
+                  ) / (2.0 * step)
+
+              return jacobian
+
+
+          num_nodes = 32
+          x = np.linspace(0.0, TAU, num_nodes, endpoint=False)
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              dt=0.003,
+              sigma=0.0,
+              ternary=False,
+              anti_R=2.0,
+              k_global=0.55,
+          )
+
+          core.lock(
+              freq_profile=(
+                  TAU
+                  * (
+                      1.0
+                      + 0.15 * np.sin(3.0 * x)
+                      + 0.03 * np.cos(7.0 * x)
+                  )
+              ),
+              amp_profile=(
+                  0.20
+                  + 0.30
+                  * (
+                      0.5
+                      + 0.5 * np.cos(5.0 * x)
+                  )
+              ),
+              reset_phase=True,
+          )
+
+          core.step(80, stability_guard=False)
+
+          theta = core.theta.copy()
+          external_phase = core.ext_phase.copy()
+          amplitude = (
+              core.ext_amp
+              * (
+                  1.0
+                  + core.mod_amp_depth
+                  * np.sin(TAU * core.mod_amp_freq * core.t)
+              )
+          )
+
+          analytical = analytical_jacobian(
+              core,
+              theta,
+              external_phase,
+              amplitude,
+          )
+
+          vector_field = lambda phases: core._dtheta(
+              phases,
+              external_phase,
+              amplitude,
+          )
+
+          numerical = numerical_jacobian(
+              vector_field,
+              theta,
+              1.0e-6,
+          )
+
+          maximum_error = float(
+              np.max(np.abs(analytical - numerical))
+          )
+
+          if maximum_error > 5.0e-8:
+              raise RuntimeError(
+                  "Analytical and numerical RPU Jacobians disagree: "
+                  f"{maximum_error:.6e}"
+              )
+
+          analytical_abscissa = float(
+              np.max(np.real(np.linalg.eigvals(analytical)))
+          )
+
+          numerical_abscissa = float(
+              np.max(np.real(np.linalg.eigvals(numerical)))
+          )
+
+          if abs(analytical_abscissa - numerical_abscissa) > 5.0e-8:
+              raise RuntimeError(
+                  "Analytical and numerical RPU spectral abscissae "
+                  "disagree: "
+                  f"{analytical_abscissa:.12e}, "
+                  f"{numerical_abscissa:.12e}"
+              )
+
+          refinement_errors = []
+
+          for step in (1.0e-3, 5.0e-4, 2.5e-4, 1.25e-4):
+              refined = numerical_jacobian(vector_field, theta, step)
+              error = float(
+                  np.linalg.norm(analytical - refined)
+                  / np.sqrt(analytical.size)
+              )
+
+              refinement_errors.append(error)
+
+              print(
+                  f"h={step:.4e}, "
+                  f"jacobian_rms_error={error:.12e}"
+              )
+
+          if not (
+              refinement_errors[0]
+              > refinement_errors[1]
+              > refinement_errors[2]
+              > refinement_errors[3]
+              > 0.0
+          ):
+              raise RuntimeError(
+                  "RPU Jacobian refinement errors did not decrease "
+                  "monotonically: "
+                  f"{refinement_errors}"
+              )
+
+          refinement_ratios = (
+              refinement_errors[0] / refinement_errors[1],
+              refinement_errors[1] / refinement_errors[2],
+              refinement_errors[2] / refinement_errors[3],
+          )
+
+          if min(refinement_ratios) < 3.5:
+              raise RuntimeError(
+                  "Centered RPU Jacobian refinement fell below "
+                  "second-order expectation: "
+                  f"{refinement_ratios}"
+              )
+
+          print(
+              f"maximum_jacobian_error={maximum_error:.12e}, "
+              f"spectral_abscissa={analytical_abscissa:.12e}, "
+              f"refinement_ratios={refinement_ratios}"
+          )
+
+          print(
+              "RPU local Jacobian and refinement validation: PASS"
+          )
+          PY
+
+      - name: Validate RPU global phase neutral mode
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+
+
+          def coupling_jacobian(core, theta):
+              arguments = (
+                  theta[None, :]
+                  - theta[:, None]
+                  - core.gamma
+              )
+
+              cosines = np.cos(arguments)
+              jacobian = core.kg * core.W * cosines
+
+              np.fill_diagonal(
+                  jacobian,
+                  -core.kg * np.sum(core.W * cosines, axis=1),
+              )
+
+              return jacobian
+
+
+          num_nodes = 48
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              sigma=0.0,
+              ternary=False,
+              anti_R=2.0,
+              k_global=0.55,
+          )
+
+          jacobian = coupling_jacobian(core, core.theta.copy())
+          ones = np.ones(num_nodes, dtype=float)
+
+          neutral_residual = float(np.linalg.norm(jacobian @ ones))
+          row_sum_error = float(
+              np.max(np.abs(np.sum(jacobian, axis=1)))
+          )
+          closest_to_zero = float(
+              np.min(np.abs(np.linalg.eigvals(jacobian)))
+          )
+
+          if neutral_residual > 1.0e-12:
+              raise RuntimeError(
+                  "Coupling-only RPU Jacobian lost the global phase "
+                  "neutral direction: "
+                  f"{neutral_residual:.6e}"
+              )
+
+          if row_sum_error > 1.0e-12:
+              raise RuntimeError(
+                  "Coupling-only RPU Jacobian row sums are not zero: "
+                  f"{row_sum_error:.6e}"
+              )
+
+          if closest_to_zero > 1.0e-10:
+              raise RuntimeError(
+                  "Coupling-only RPU spectrum does not contain the "
+                  "expected global phase neutral mode: "
+                  f"{closest_to_zero:.6e}"
+              )
+
+          print(
+              f"neutral_residual={neutral_residual:.12e}, "
+              f"row_sum_error={row_sum_error:.12e}, "
+              f"closest_eigenvalue_to_zero={closest_to_zero:.12e}"
+          )
+
+          print("RPU global phase neutral mode: PASS")
+          PY
+
+      - name: Validate local nonlinear linearization order
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+          from rpu_core.rpu_core_v1 import TAU
+
+
+          def analytical_jacobian(core, theta, external_phase, amplitude):
+              arguments = (
+                  theta[None, :]
+                  - theta[:, None]
+                  - core.gamma
+              )
+
+              cosines = np.cos(arguments)
+              jacobian = core.kg * core.W * cosines
+
+              np.fill_diagonal(
+                  jacobian,
+                  -core.kg * np.sum(core.W * cosines, axis=1)
+                  - amplitude * np.cos(external_phase - theta),
+              )
+
+              return jacobian
+
+
+          num_nodes = 32
+          x = np.linspace(0.0, TAU, num_nodes, endpoint=False)
+
+          core = RPUCore(
+              num_nodes,
+              seed=76,
+              dt=0.003,
+              sigma=0.0,
+              ternary=False,
+              anti_R=2.0,
+              k_global=0.55,
+          )
+
+          core.lock(
+              freq_profile=(
+                  TAU
+                  * (
+                      1.0
+                      + 0.15 * np.sin(3.0 * x)
+                  )
+              ),
+              amp_profile=(
+                  0.20
+                  + 0.30
+                  * (
+                      0.5
+                      + 0.5 * np.cos(5.0 * x)
+                  )
+              ),
+              reset_phase=True,
+          )
+
+          core.step(80, stability_guard=False)
+
+          theta = core.theta.copy()
+          external_phase = core.ext_phase.copy()
+          amplitude = (
+              core.ext_amp
+              * (
+                  1.0
+                  + core.mod_amp_depth
+                  * np.sin(TAU * core.mod_amp_freq * core.t)
+              )
+          )
+
+          jacobian = analytical_jacobian(
+              core,
+              theta,
+              external_phase,
+              amplitude,
+          )
+
+          direction = (
+              np.sin(2.0 * x)
+              + 0.30 * np.cos(9.0 * x)
+          )
+          direction /= np.linalg.norm(direction)
+
+          baseline = core._dtheta(
+              theta,
+              external_phase,
+              amplitude,
+          )
+
+          residuals = []
+
+          for epsilon in (1.0e-3, 5.0e-4, 2.5e-4, 1.25e-4):
+              nonlinear_increment = (
+                  core._dtheta(
+                      theta + epsilon * direction,
+                      external_phase,
+                      amplitude,
+                  )
+                  - baseline
+              )
+
+              linear_prediction = epsilon * (jacobian @ direction)
+              residual = float(
+                  np.linalg.norm(
+                      nonlinear_increment - linear_prediction
+                  )
+              )
+              residuals.append(residual)
+
+              print(
+                  f"epsilon={epsilon:.4e}, "
+                  f"linearization_residual={residual:.12e}"
+              )
+
+          if not (
+              residuals[0]
+              > residuals[1]
+              > residuals[2]
+              > residuals[3]
+              > 0.0
+          ):
+              raise RuntimeError(
+                  "Local nonlinear linearization residuals did not "
+                  "decrease monotonically: "
+                  f"{residuals}"
+              )
+
+          ratios = (
+              residuals[0] / residuals[1],
+              residuals[1] / residuals[2],
+              residuals[2] / residuals[3],
+          )
+
+          if min(ratios) < 3.5:
+              raise RuntimeError(
+                  "Local nonlinear remainder did not show the expected "
+                  "quadratic scaling: "
+                  f"{ratios}"
+              )
+
+          print(f"quadratic_scaling_ratios={ratios}")
+          print("Local nonlinear linearization order: PASS")
+          PY
+
+      - name: Validate deterministic RPU spectral response to profile morphing
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from rpu_core import RPUCore
+          from rpu_core.rpu_core_v1 import TAU
+
+
+          def local_jacobian(core, theta, external_phase, amplitude):
+              arguments = (
+                  theta[None, :]
+                  - theta[:, None]
+                  - core.gamma
+              )
+
+              cosines = np.cos(arguments)
+              jacobian = core.kg * core.W * cosines
+
+              np.fill_diagonal(
+                  jacobian,
+                  -core.kg * np.sum(core.W * cosines, axis=1)
+                  - amplitude * np.cos(external_phase - theta),
+              )
+
+              return jacobian
+
+
+          num_nodes = 32
+          x = np.linspace(0.0, TAU, num_nodes, endpoint=False)
+
+          profile_a = (
+              1.0
+              + 0.25 * np.sin(3.0 * x)
+              + 0.05 * np.cos(11.0 * x)
+          )
+
+          profile_b = (
+              1.0
+              + 0.25 * np.sin(7.0 * x + 0.4)
+              - 0.05 * np.cos(5.0 * x)
+          )
+
+
+          def spectral_curve():
+              alphas = np.linspace(0.0, 1.0, 11)
+              spectral_abscissae = []
+
+              for alpha in alphas:
+                  core = RPUCore(
+                      num_nodes,
+                      seed=76,
+                      dt=0.004,
+                      sigma=0.0,
+                      ternary=False,
+                      anti_R=2.0,
+                      k_global=0.75,
+                  )
+
+                  core.lock(
+                      freq_profile=(
+                          TAU
+                          * core.mix(
+                              profile_a,
+                              profile_b,
+                              alpha=alpha,
+                          )
+                      ),
+                      amp_profile=np.full(num_nodes, 0.50),
+                      reset_phase=True,
+                  )
+
+                  core.step(100, stability_guard=False)
+
+                  amplitude = (
+                      core.ext_amp
+                      * (
+                          1.0
+                          + core.mod_amp_depth
+                          * np.sin(TAU * core.mod_amp_freq * core.t)
+                      )
+                  )
+
+                  eigenvalues = np.linalg.eigvals(
+                      local_jacobian(
+                          core,
+                          core.theta,
+                          core.ext_phase,
+                          amplitude,
+                      )
+                  )
+
+                  if not np.all(np.isfinite(eigenvalues)):
+                      raise RuntimeError(
+                          "RPU profile morphing produced non-finite "
+                          "local eigenvalues."
+                      )
+
+                  spectral_abscissae.append(
+                      float(np.max(np.real(eigenvalues)))
+                  )
+
+              return alphas, np.asarray(spectral_abscissae, dtype=float)
+
+
+          first_alpha, first_curve = spectral_curve()
+          second_alpha, second_curve = spectral_curve()
+
+          np.testing.assert_array_equal(first_alpha, second_alpha)
+          np.testing.assert_array_equal(first_curve, second_curve)
+
+          spectral_variation = float(np.ptp(first_curve))
+
+          if spectral_variation <= 1.0e-3:
+              raise RuntimeError(
+                  "RPU local spectral marker did not respond sufficiently "
+                  "to profile morphing: "
+                  f"{spectral_variation:.6e}"
+              )
+
+          print(
+              f"spectral_abscissa_min={np.min(first_curve):.12e}, "
+              f"spectral_abscissa_max={np.max(first_curve):.12e}, "
+              f"spectral_variation={spectral_variation:.12e}"
+          )
+
+          print(
+              "Deterministic RPU spectral response to profile morphing: PASS"
+          )
+          PY
+
+      - name: Verify repository integrity
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "Repository was modified during spectral validation."
+            exit 1
+          fi
+
+          echo "Repository integrity validation: PASS"
+
+      - name: Report spectral validation result
+        run: |
+          echo "Resonance spectral stability and local dynamics validation: PASS"
