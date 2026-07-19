@@ -8,6 +8,7 @@ type: software
 authors:
   - family-names: "Marnov"
     given-names: "Maksym"
+    orcid: "https://orcid.org/0009-0000-0832-9597"
 
 version: "v1.0"
 
